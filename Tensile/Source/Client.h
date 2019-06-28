@@ -1467,7 +1467,52 @@ void initInput(
   }
 }
 
-
+// complex number doesn't have positive and negative.
+// Not support Abs and AltSign
+template<>
+void initInput<TensileComplexFloat>(
+    const std::string &tag,
+    unsigned dataInitType,
+    TensileComplexFloat **initial,
+    size_t     maxSize,
+    InitOp     initOp)
+{
+  if (dataInitType == 0) {
+    for (size_t i = 0; i < maxSize; i++) {
+      (*initial)[i] = tensileGetZero<TensileComplexFloat>(); }
+    std::cout << ".";
+  } else if (dataInitType == 1) {
+    for (size_t i = 0; i < maxSize; i++) {
+      (*initial)[i] = tensileGetOne<TensileComplexFloat>(); }
+    std::cout << ".";
+  } else if (dataInitType == 2) {
+    for (size_t i = 0; i < maxSize; i++) {
+      (*initial)[i] = tensileGetTypeForInt<TensileComplexFloat>(i); }
+    std::cout << ".";
+  } else if (dataInitType == 3) {
+    for (size_t i = 0; i < maxSize; i++) {
+      TensileComplexFloat v = tensileGetRandom<TensileComplexFloat>();
+      (*initial)[i] = v;
+    }
+    std::cout << ".";
+  } else if (dataInitType == 4) {
+    for (size_t i = 0; i < maxSize; i++) {
+      (*initial)[i] = tensileGetNaN<TensileComplexFloat>(); }
+    std::cout << ".";
+  } else if (dataInitType == 5) {
+    // Will initialize later for each matrix dim:
+    specializeAB = true;
+  } else if (dataInitType == 6) {
+    for (size_t i = 0; i < maxSize; i++) {
+      TensileComplexFloat v = tensileGetTrig<TensileComplexFloat>(i);   // initialize with sin to get value between -1 and 1.
+      (*initial)[i] = v;
+    }
+    std::cout << ".";
+  } else {
+    std::cout << "FATAL ERROR: Bad " << tag << " = " << dataInitType << "\n";
+    exit(0);
+  }
+}
 /*******************************************************************************
  * initialize data
  ******************************************************************************/
