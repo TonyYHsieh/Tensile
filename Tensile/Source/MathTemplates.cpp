@@ -280,6 +280,14 @@ TensileComplexFloat tensileMultiply( TensileComplexFloat a, TensileComplexFloat 
 }
 // complex double
 template< >
+float tensileMultiply( TensileComplexDouble a, TensileComplexDouble b ) {
+  return 0.0f;
+}
+template< >
+float tensileMultiply( TensileComplexDouble a, float b ) {
+  return 0.0f;
+}
+template< >
 TensileComplexDouble tensileMultiply( TensileComplexDouble a, TensileComplexDouble b ) {
   TensileComplexDouble c;
   TENSILEREAL(c) = TENSILEREAL(a)*TENSILEREAL(b) - TENSILECOMP(a)*TENSILECOMP(b);
@@ -335,7 +343,6 @@ TensileComplexFloat tensileAdd( TensileComplexFloat a, TensileComplexFloat b ) {
   TENSILECOMP(c) = TENSILECOMP(a)+TENSILECOMP(b);
   return c;
 }
-
 template< >
 float tensileAdd( TensileComplexFloat a, float b ) {
   return 0.0f;
@@ -348,6 +355,10 @@ TensileComplexDouble tensileAdd( TensileComplexDouble a, TensileComplexDouble b 
   TENSILEREAL(c) = TENSILEREAL(a)+TENSILEREAL(b);
   TENSILECOMP(c) = TENSILECOMP(a)+TENSILECOMP(b);
   return c;
+}
+template< >
+float tensileAdd( TensileComplexDouble a, float b ) {
+  return 0.0f;
 }
 
 /*******************************************************************************

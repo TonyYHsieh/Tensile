@@ -1414,7 +1414,7 @@ bool benchmarkProblemSizes(
 #endif // benchmark
 
 enum InitOp {None, Abs, AltSign};
-template<typename DataType>
+template<typename DataType, typename std::enable_if<!(std::is_same<DataType, TensileComplexFloat>{} || std::is_same<DataType, TensileComplexDouble>{})>::type* = nullptr >
 void initInput(
     const std::string &tag,
     unsigned dataInitType,
@@ -1469,42 +1469,42 @@ void initInput(
 
 // complex number doesn't have positive and negative.
 // Not support Abs and AltSign
-template<>
-void initInput<TensileComplexFloat>(
+template<typename DataType, typename std::enable_if<std::is_same<DataType, TensileComplexFloat>{} || std::is_same<DataType, TensileComplexDouble>{}>::type* = nullptr >
+void initInput(
     const std::string &tag,
     unsigned dataInitType,
-    TensileComplexFloat **initial,
+    DataType **initial,
     size_t     maxSize,
     InitOp     initOp)
 {
   if (dataInitType == 0) {
     for (size_t i = 0; i < maxSize; i++) {
-      (*initial)[i] = tensileGetZero<TensileComplexFloat>(); }
+      (*initial)[i] = tensileGetZero<DataType>(); }
     std::cout << ".";
   } else if (dataInitType == 1) {
     for (size_t i = 0; i < maxSize; i++) {
-      (*initial)[i] = tensileGetOne<TensileComplexFloat>(); }
+      (*initial)[i] = tensileGetOne<DataType>(); }
     std::cout << ".";
   } else if (dataInitType == 2) {
     for (size_t i = 0; i < maxSize; i++) {
-      (*initial)[i] = tensileGetTypeForInt<TensileComplexFloat>(i); }
+      (*initial)[i] = tensileGetTypeForInt<DataType>(i); }
     std::cout << ".";
   } else if (dataInitType == 3) {
     for (size_t i = 0; i < maxSize; i++) {
-      TensileComplexFloat v = tensileGetRandom<TensileComplexFloat>();
+      DataType v = tensileGetRandom<DataType>();
       (*initial)[i] = v;
     }
     std::cout << ".";
   } else if (dataInitType == 4) {
     for (size_t i = 0; i < maxSize; i++) {
-      (*initial)[i] = tensileGetNaN<TensileComplexFloat>(); }
+      (*initial)[i] = tensileGetNaN<DataType>(); }
     std::cout << ".";
   } else if (dataInitType == 5) {
     // Will initialize later for each matrix dim:
     specializeAB = true;
   } else if (dataInitType == 6) {
     for (size_t i = 0; i < maxSize; i++) {
-      TensileComplexFloat v = tensileGetTrig<TensileComplexFloat>(i);   // initialize with sin to get value between -1 and 1.
+      DataType v = tensileGetTrig<DataType>(i);   // initialize with sin to get value between -1 and 1.
       (*initial)[i] = v;
     }
     std::cout << ".";
