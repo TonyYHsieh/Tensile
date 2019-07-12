@@ -4731,7 +4731,6 @@ class KernelWriterAssembly(KernelWriter):
           kStr += inst("s_mov_b32", sgpr(tmpSgpr+1), "0x3ff00000", "High part of double 1.0")
           kStr += inst("s_cmp_eq_u64", sgpr("Alpha",2), sgpr(tmpSgpr,2), "Alpha == 1.0 ?")
 
-        #jimmy to check
         elif kernel["ProblemType"]["DataType"].isSingleComplex():
           kStr += inst("s_mov_b32", sgpr(tmpSgpr+0), "1.0", "real part of complex number 1.0")
           kStr += inst("s_mov_b32", sgpr(tmpSgpr+1), "0.0", "complex part of complex number 1.0")
@@ -6305,14 +6304,13 @@ class KernelWriterAssembly(KernelWriter):
             regIdx *= 2 # for doubles, each element takes two regs
             kStr += inst("v_add_f64", vgpr("ValuC+%u"%cIdx,2), \
                 vgpr("ValuC+%u" % regIdx,2), vgpr("ValuC+%u"%cIdx,2), "c[%u] += c[%u]"%(cIdx, regIdx) )
-          # jimmy to check
           elif kernel["ProblemType"]["DataType"].isSingleComplex():
             cIdx *= 2
             regIdx *= 2
             kStr += inst("v_add_f32", vgpr("ValuC+%u"%cIdx), \
                 vgpr("ValuC+%u" % regIdx), vgpr("ValuC+%u"%cIdx), "c[%u] += c[%u]"%(cIdx, regIdx) )
-            kStr += inst("v_add_f32", vgpr("ValuC+%u"%cIdx+1), \
-                vgpr("ValuC+%u" % regIdx+1), vgpr("ValuC+%u"%cIdx+1), "c[%u] += c[%u]"%(cIdx+1, regIdx+1) )
+            kStr += inst("v_add_f32", vgpr("ValuC+%u"%(cIdx+1)), \
+                vgpr("ValuC+%u" % (regIdx+1)), vgpr("ValuC+%u"%(cIdx+1)), "c[%u] += c[%u]"%(cIdx+1, regIdx+1) )
           else:
             assert(0) # unsupported data type, need to modify here and LSU write/read code
     return kStr
