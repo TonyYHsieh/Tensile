@@ -291,7 +291,7 @@ void specializeData(
       if (db & 0x2) {
         std::cout << "[" << serialIdx << "] = " << val << "\n";
       }
-      initialData[serialIdx] = val++;  // actually initialize the element
+      initialData[serialIdx] = val += static_cast<DataType>(1);  // actually initialize the element
 
       // increment bound coord
       boundCoord[numIndicesSummation-1]++;
