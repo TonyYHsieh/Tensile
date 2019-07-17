@@ -117,9 +117,9 @@ class DataType:
             return False
     def isComplex(self):
         return not self.isReal()
-    def isDoubleComplex(self):^M
+    def isDoubleComplex(self):
         return self.value == DataType.complexDouble
-    def isSingleComplex(self):^M
+    def isSingleComplex(self):
         return self.value == DataType.complexSingle
     def isDouble(self):
         return self.value == DataType.double
