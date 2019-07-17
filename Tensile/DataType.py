@@ -117,10 +117,14 @@ class DataType:
             return False
     def isComplex(self):
         return not self.isReal()
+    def isDoubleComplex(self):^M
+        return self.value == DataType.complexDouble
+    def isSingleComplex(self):^M
+        return self.value == DataType.complexSingle
     def isDouble(self):
-        return self.value == DataType.double or self.value == DataType.complexDouble
+        return self.value == DataType.double
     def isSingle(self):
-        return self.value == DataType.single or self.value == DataType.complexSingle
+        return self.value == DataType.single
     def isHalf(self):
         return self.value == DataType.half
     def isInt32(self):
