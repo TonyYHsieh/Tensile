@@ -4733,7 +4733,9 @@ class KernelWriterAssembly(KernelWriter):
 
         #jimmy to check
         elif kernel["ProblemType"]["DataType"].isSingleComplex():
-          kStr += inst("s_cmp_eq_u32", sgpr("Alpha"), "1.0", "Alpha == 1.0 ?")
+          kStr += inst("s_mov_b32", sgpr(tmpSgpr+0), "1.0", "real part of complex number 1.0")
+          kStr += inst("s_mov_b32", sgpr(tmpSgpr+1), "0.0", "complex part of complex number 1.0")
+          kStr += inst("s_cmp_eq_u64", sgpr("Alpha",2), sgpr(tmpSgpr,2), "Alpha == 1.0 ?")
 
         kStr += inst("s_cbranch_scc0 %s"%skipOptNLL, "branch if alpha != 1")
         kStr += "\n"
@@ -7487,7 +7489,7 @@ class KernelWriterAssembly(KernelWriter):
         elif kernel["ProblemType"]["DataType"].isDouble():
           kStr += inst("v_mul_f64", vgpr("ValuC+%u"%(sumIdxV*2),2), sgpr("Alpha",2), vgpr("ValuC+%u"%(sumIdxV*2),2), "*= alpha")
 
-        # single precision complex jimmy to check
+        # single precision complex
         elif kernel["ProblemType"]["DataType"].isSingleComplex():
           tmpVgpr = self.vgprPool.checkOut(1)
           kStr += inst("v_mov_b32", vgpr(tmpVgpr), vgpr("ValuC+%u"%(sumIdxV*2)), "store Cr")
@@ -8136,13 +8138,13 @@ class KernelWriterAssembly(KernelWriter):
               kStr += inst("v_fma_f64", vgpr("ValuC+%u"%(sumIdxV*2),2), vgpr(dataV+0,2), sgpr("Beta",2), vgpr("ValuC+%u"%(sumIdxV*2),2), \
                   "finalSum = sum*alpha + C*beta")
 
-            # single precision complex jimmy to check
+            # single precision complex
             elif kernel["ProblemType"]["DataType"].isSingleComplex():
               # dataV+0 = new c = old c*beta
-              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2)), vgpr(dataV+0), sgpr("Beta"), "finalSum = sum*alpha + C*beta")
-              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2)), vgpr(dataV+1), "-"+sgpr("Beta+1"), "finalSum = sum*alpha + C*beta")
-              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2+1)), vgpr(dataV+1), sgpr("Beta"), "finalSum = sum*alpha + C*beta")
-              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2+1)), vgpr(dataV+0), sgpr("Beta+1"), "finalSum = sum*alpha + C*beta")
+              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2)), vgpr(dataV+0), sgpr("Beta"), "finalSum real += Cr * Br")
+              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2)), vgpr(dataV+1), "-"+sgpr("Beta+1"), "finalSum real += Ci * -Bi")
+              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2+1)), vgpr(dataV+1), sgpr("Beta"), "finalSum complex += Ci * Br")
+              kStr += inst("v_mac_f32", vgpr("ValuC+%u"%(sumIdxV*2+1)), vgpr(dataV+0), sgpr("Beta+1"), "finalSum complex += Cr * Bi")
 
         # pack stores, beta and non-beta reach here:
         for vi in range(0, gwvw):
