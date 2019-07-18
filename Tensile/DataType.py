@@ -34,8 +34,8 @@ class DataType:
     """
     properties = [{'char': 'S', 'name': 'single', 'enum': 'Float', 'reg': 1, 'ocl': 'float', 'hip': 'float', 'libType': 'float', 'libEnum': 'tensileDataTypeFloat'},
         {'char': 'D', 'name': 'double', 'enum': 'Double', 'reg': 2, 'ocl': 'double', 'hip': 'double', 'libType': 'double', 'libEnum': 'tensileDataTypeDouble'},
-        {'char': 'C', 'name': 'complexSingle', 'enum': 'ComplexFloat', 'reg': 2, 'ocl': 'float2', 'hip': 'float2', 'libType': 'TensileComplexFloat', 'libEnum': 'tensileDataTypeComplexFloat'},
-        {'char': 'Z', 'name': 'complexDouble', 'enum': 'ComplexDouble', 'reg': 4, 'ocl': 'double2', 'hip': 'double2', 'libType': 'TensileComplexDouble', 'libEnum': 'tensileDataTypeComplexDouble'},
+        {'char': 'C', 'name': 'complexSingle', 'enum': 'ComplexFloat', 'reg': 2, 'ocl': 'float2', 'hip': 'TensileComplexFloat', 'libType': 'TensileComplexFloat', 'libEnum': 'tensileDataTypeComplexFloat'},
+        {'char': 'Z', 'name': 'complexDouble', 'enum': 'ComplexDouble', 'reg': 4, 'ocl': 'double2', 'hip': 'TensileComplexDouble', 'libType': 'TensileComplexDouble', 'libEnum': 'tensileDataTypeComplexDouble'},
         {'char': 'H', 'name': 'half', 'enum': 'Half', 'reg': 0.5, 'ocl': 'ERROR', 'hip': 'tensile_half', 'libType': 'TensileHalf', 'libEnum': 'tensileDataTypeHalf'},
         {'char': '4xi8', 'name': 'int8x4', 'enum': 'Int8', 'reg': 1, 'ocl': 'ERROR', 'hip': 'uint32_t', 'libType': 'TensileInt8x4', 'libEnum': 'tensileDataTypeInt8x4'},
         {'char': 'I', 'name': 'int32', 'enum': 'Int32', 'reg': 1, 'ocl': 'ERROR', 'hip': 'int32_t', 'libType': 'TensileInt32', 'libEnum': 'tensileDataTypeInt32'},
