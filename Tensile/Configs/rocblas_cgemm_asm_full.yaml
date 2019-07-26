@@ -64,7 +64,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
   ########################################
   # NT
@@ -108,7 +108,38 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
+
+    - # BenchmarkProblemSizeGroup - Feb 24 version1 & version2
+      InitialSolutionParameters:
+      BenchmarkCommonParameters:
+        - BufferLoad: [True]
+        - BufferStore: [True]
+        - KernelLanguage: ["Assembly"]
+        - EdgeType: ["ShiftPtr"]
+        - LoopTail: [True]
+        - ReplacementKernel: [True]
+      ForkParameters:
+        - FractionalLoad: [True]
+        - PrefetchGlobalRead: [True]
+        - PrefetchLocalRead: [False]
+        - PersistentKernel: [0]
+        - SuppressNoLoadLoop: [False]
+        - StaggerU: [0]
+        - ThreadTile:
+          - [ 6, 4 ]
+        - WorkGroup:
+          - [  8, 16,  1 ]
+        - WorkGroupMapping: [4, 8]
+        - DepthU: [ 4]
+        - VectorWidth: [-1]
+      BenchmarkForkParameters:
+      JoinParameters:
+      BenchmarkJoinParameters:
+      BenchmarkFinalParameters:
+        - ProblemSizes:
+          - Range: [ [256, 256, 4096], [2048], [1], [256] ]  # 10
+
 
   ########################################
   # TN
@@ -152,7 +183,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
   ########################################
   # TT
@@ -196,7 +227,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
   ########################################
   # NC
@@ -241,7 +272,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
   ########################################
   # CN
@@ -286,7 +317,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
   ########################################
   # CT
@@ -331,7 +362,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
   ########################################
   # TC
@@ -376,7 +407,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
   ########################################
   # CC
@@ -422,7 +453,7 @@ BenchmarkProblems:
       BenchmarkJoinParameters:
       BenchmarkFinalParameters:
         - ProblemSizes:
-          - Range: [ [3072, 640, 44032], [1792], [1], [256] ]
+          - Range: [ [64], [64], [1], [64] ]
 
 
 LibraryLogic:
