@@ -81,7 +81,7 @@ const unsigned int maxNumIndices = 4;
 const unsigned int totalIndices[numProblemTypes] = { 4 };
 const unsigned int numProblems = 1;
 const unsigned int problemSizes[numProblems][8] = {
-  {   64,   64,    1,    4,   64,   64,   64,    4 }};
+  {   311,   311,    1,    113,   311,   311,   311,    113 }};
 const unsigned int minStrides[4] = {0, 0, 0, 0};
 /* problem sizes */
 size_t maxSizeD = 5308416;
