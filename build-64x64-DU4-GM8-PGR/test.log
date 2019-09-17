@@ -1,0 +1,441 @@
+
+################################################################################
+#
+#  Tensile v4.12.0
+# Restoring default globalParameters
+#  Config: /home/htony/Source/Tensile/1_MFMA/Tensile/Tensile/Configs/rocblas_sgemm_hip_test.yaml
+#
+################################################################################
+
+# Restoring default globalParameters
+# Detected local GPU with ISA: gfx908
+# Asm caps for gfx803: HasCodeObjectV3=1 SupportedISA=1 HasDirectToLds=1 MaxVmcnt=15 HasAddLshl=0 HasSMulHi=0 HasExplicitCO=0
+# Arch caps for gfx803:{'HasEccHalf': False}
+# Asm caps for gfx900: HasCodeObjectV3=1 SupportedISA=1 HasDirectToLds=1 MaxVmcnt=63 HasAddLshl=1 HasSMulHi=1 HasExplicitCO=1
+# Arch caps for gfx900:{'HasEccHalf': False}
+# Asm caps for gfx906: HasCodeObjectV3=1 SupportedISA=1 HasDirectToLds=1 MaxVmcnt=63 HasAddLshl=1 HasSMulHi=1 HasExplicitCO=1
+# Arch caps for gfx906:{'HasEccHalf': True}
+# Asm caps for gfx908: HasCodeObjectV3=1 SupportedISA=1 HasDirectToLds=1 MaxVmcnt=63 HasAddLshl=1 HasSMulHi=1 HasExplicitCO=1
+# Arch caps for gfx908:{'HasEccHalf': True}
+# Asm caps for gfx000: HasCodeObjectV3=0 SupportedISA=0 HasDirectToLds=0 MaxVmcnt=0 HasAddLshl=0 HasSMulHi=0 HasExplicitCO=0
+# Arch caps for gfx000:{'HasEccHalf': False}
+
+-- The C compiler identification is GNU 5.4.0
+-- The CXX compiler identification is Clang 10.0.0
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /opt/rocm/bin/hcc
+-- Check for working CXX compiler: /opt/rocm/bin/hcc -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found PkgConfig: /usr/bin/pkg-config (found version "0.29.1") 
+-- Try OpenMP C flag = [-fopenmp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Success
+-- Try OpenMP CXX flag = [-fopenmp=libomp]
+-- Performing Test OpenMP_FLAG_DETECTED
+-- Performing Test OpenMP_FLAG_DETECTED - Success
+-- Found OpenMP: -fopenmp  
+-- Boost version: 1.58.0
+-- Found the following Boost libraries:
+--   program_options
+-- Found ROCmSMI: /opt/rocm/rocm_smi/lib/librocm_smi64.so  
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/0_Build
+Scanning dependencies of target TensileHost
+[  3%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/llvm/Loading.cpp.o
+[  6%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/AMDGPU.cpp.o
+[  9%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/ContractionProblem.cpp.o
+[ 16%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/ContractionSolution.cpp.o
+[ 16%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/DataTypes.cpp.o
+[ 19%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/Debug.cpp.o
+[ 22%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/EmbeddedLibrary.cpp.o
+[ 25%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/TensorDescriptor.cpp.o
+[ 29%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/TensorOps.cpp.o
+[ 32%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/Tensile.cpp.o
+[ 35%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/Utils.cpp.o
+[ 38%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/KernelArguments.cpp.o
+[ 41%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/llvm/YAML.cpp.o
+[ 48%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/hip/HipHardware.cpp.o
+[ 48%] Building CXX object lib/CMakeFiles/TensileHost.dir/source/hip/HipSolutionAdapter.cpp.o
+[ 51%] Linking CXX static library libTensileHost.a
+[ 51%] Built target TensileHost
+Scanning dependencies of target TensileClient
+[ 58%] Building CXX object client/CMakeFiles/TensileClient.dir/source/CSVStackFile.cpp.o
+[ 58%] Building CXX object client/CMakeFiles/TensileClient.dir/source/BenchmarkTimer.cpp.o
+[ 61%] Building CXX object client/CMakeFiles/TensileClient.dir/source/ClientProblemFactory.cpp.o
+[ 64%] Building CXX object client/CMakeFiles/TensileClient.dir/source/DataInitialization.cpp.o
+[ 67%] Building CXX object client/CMakeFiles/TensileClient.dir/source/HardwareMonitor.cpp.o
+[ 70%] Building CXX object client/CMakeFiles/TensileClient.dir/source/ProgressListener.cpp.o
+[ 74%] Building CXX object client/CMakeFiles/TensileClient.dir/source/HardwareMonitorListener.cpp.o
+[ 77%] Building CXX object client/CMakeFiles/TensileClient.dir/source/MetaRunListener.cpp.o
+[ 80%] Building CXX object client/CMakeFiles/TensileClient.dir/source/Reference.cpp.o
+[ 83%] Building CXX object client/CMakeFiles/TensileClient.dir/source/ReferenceValidator.cpp.o
+[ 87%] Building CXX object client/CMakeFiles/TensileClient.dir/source/ResultFileReporter.cpp.o
+[ 90%] Building CXX object client/CMakeFiles/TensileClient.dir/source/TimingEvents.cpp.o
+[ 93%] Linking CXX static library libTensileClient.a
+[ 93%] Built target TensileClient
+Scanning dependencies of target tensile_client
+[ 96%] Building CXX object client/CMakeFiles/tensile_client.dir/main.cpp.o
+[100%] Linking CXX executable tensile_client
+[100%] Built target tensile_client
+
+################################################################################
+# Converting Config to BenchmarkProcess Object
+################################################################################
+
+# Filling in Parameters With Defaults
+# Convert Parameters to Steps
+# Benchmark Common Parameters
+# Fork Parameters
+# Benchmark Fork Parameters
+# Join Parameters
+# Benchmark Join Parameters
+# Benchmark Final
+# NumBenchmarkSteps: 1
+
+################################################################################
+# Done Creating BenchmarkProcess Object
+################################################################################
+# Empty winners - use fast initialization of hardcodedParameters
+
+
+################################################################################
+# BenchmarkStep: Cijk_Ailk_Bljk_SB_00 - 00_Final 64.071s
+# NumProblems: 1
+# BenchmarkParameters:
+# MaxPossibleSolutions: 1 = 1 (hardcoded) * 1 (benchmark)
+# Enumerating Solutions
+[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||] 100% (0.0 secs elapsed)
+# Populating initial winners (1 solutions)
+
+# Actual Solutions: 1 / 1
+
+# Writing Kernels...
+Generating kernels: Launching 56 threads...
+Generating kernels: Done.
+1
+Compiling source kernels: Launching 56 threads...
+Compiling source kernels: Done.
+# Kernel Building elapsed time = 5.0 secs
+# Writing Solutions
+[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||] 100% (0.0 secs elapsed)
+# Writing Custom CMake
+# Copying files that differ from sourceTmp -> source
++ echo
+
++ echo '################################################################################'
+################################################################################
++ echo '# Configuring CMake for Client'
+# Configuring CMake for Client
++ echo '################################################################################'
+################################################################################
++ cmake -DTensile_RUNTIME_LANGUAGE=HIP -DTensile_CODE_OBJECT_VERSION=V2 -DTensile_COMPILER=hcc -DTensile_RESUME_BENCHMARK=OFF -DTensile_CLIENT_BENCHMARK=ON -DTENSILE_NEW_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release -DTensile_MERGE_FILES=ON ../source
+-- The C compiler identification is GNU 5.4.0
+-- The CXX compiler identification is GNU 5.4.0
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Tensile_CODE_OBJECT_VERSION from Tensile/Source/CMakeLists.txt: V2
+-- Tensile_COMPILER            from Tensile/Source/CMakeLists.txt: hcc
+-- Making BenchmarkClient
+-- ENV HIP_PATH = /opt/rocm/include
+-- HIPCC = /opt/rocm/bin/hipcc
+-- Found HIP: /opt/rocm/include  
+-- Found HCC: /opt/rocm/lib/libhsa-runtime64.so  
+-- HCC_FOUND = TRUE
+-- HCC = /opt/rocm/bin/hcc
+-- HCC_INCLUDE_DIRS = /opt/rocm/include/hcc
+-- HSA_LIBRARIES = /opt/rocm/lib/libhsa-runtime64.so
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/1_BenchmarkProblems/Cijk_Ailk_Bljk_SB_00/00_Final/build
++ echo
+
++ echo '################################################################################'
+################################################################################
++ echo '# Building Client'
+# Building Client
++ echo '################################################################################'
+################################################################################
++ cmake --build . --config Release -- -j 8
+Scanning dependencies of target client
+[ 14%] Building CXX object CMakeFiles/client.dir/Client.cpp.o
+[ 28%] Building CXX object CMakeFiles/client.dir/MathTemplates.cpp.o
+[ 42%] Building CXX object CMakeFiles/client.dir/SolutionHelper.cpp.o
+[ 57%] Building CXX object CMakeFiles/client.dir/Tools.cpp.o
+[ 85%] Building CXX object CMakeFiles/client.dir/Solutions.cpp.o
+[ 85%] Building CXX object CMakeFiles/client.dir/Kernels.cpp.o
+[100%] Linking CXX executable client
+[100%] Built target client
++ /opt/rocm/bin/rocm-smi -d 0 --setfan 255 --setsclk 7
+WARNING: No AMD GPUs specified
+No supported devices available to display
+
+
+========================ROCm System Management Interface========================
+==============================End of ROCm SMI Log ==============================
++ sleep 1
++ /opt/rocm/bin/rocm-smi -d 0 -a
+WARNING: No AMD GPUs specified
+No supported devices available to display
+
+
+========================ROCm System Management Interface========================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+Driver version: 5.0.79
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+PIDs for KFD processes:
+
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+================================================================================
+==============================End of ROCm SMI Log ==============================
++ set +e
++ ./client --platform-idx 0 --device-idx 0 --init-alpha 2 --init-beta 0 --init-d 0 --init-c 3 --init-a 3 --init-b 3 --c-equal-d 1 --print-valids 0 --print-max 4 --num-benchmarks 1 --num-elements-to-validate 11111 --num-enqueues-per-sync 1 --num-syncs-per-benchmark 1 --use-gpu-timer 1 --sleep-percent 200 --benchmark-solutions 0
+################################################################################
+# Device[0]: Device 738c (gfx908)
+# Compute:   1536 GFlop/s (120 CUs @ 100 MHz)
+# Bandwidth: 102 GB/s (4096-bit @ 100 MHz)
+################################################################################
+Tensile Client Columns: GFlops (clock-normalized), GFlops (raw), SolName, KernelMs, Valid/Total, CoreMhz, MemMhz, TempC, FanSpeed, Idx/Total, TimeStamp
+Initializing 362 MBytes................
+
+
+Problem[0/1]: 64, 64, 1, 4, 64, 64, 64, 4
+     0.306,      0.306, Cijk_Ailk_Bljk_SB_MT64x64x4_SE_*,     0.107, PASSED: 4096/4096, 300, 18446744073709551615, 34.000, 0, 0/1, 2019-09-17 09:49:48.733161, 
+
+Run kernels elapsed gpu_time:0.000 secs  total_time:0.471 secs 0.02% gpu utilization
+
+Fastest: 0.31 GFlop/s 107.20 us by (0) Cijk_Ailk_Bljk_SB_MT64x64x4_SE_
++ ERR1=0
++ /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/0_Build/client/tensile_client --config-file=/home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/1_BenchmarkProblems/Cijk_Ailk_Bljk_SB_00/00_Final/build/../source/ClientParameters.ini
+Loading /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/1_BenchmarkProblems/Cijk_Ailk_Bljk_SB_00/00_Final/source/library/Kernels.so-000-gfx803.hsaco
+Loading /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/1_BenchmarkProblems/Cijk_Ailk_Bljk_SB_00/00_Final/source/library/Kernels.so-000-gfx900.hsaco
+Loading /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/1_BenchmarkProblems/Cijk_Ailk_Bljk_SB_00/00_Final/source/library/Kernels.so-000-gfx906.hsaco
+Loading /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/1_BenchmarkProblems/Cijk_Ailk_Bljk_SB_00/00_Final/source/library/Kernels.so-000-gfx908.hsaco
+run, problem-progress, solution-progress, operation, problem-sizes, solution, validation, time-ns, gflops, temp-edge, clock-sys, clock-soc, clock-mem, fan-rpm, hardware-samples, enqueue-time
+0, 0/1, 0/0, Contraction_l_Ailk_Bljk_Cijk_Dijk, "(64,64,1,4)", Cijk_Ailk_Bljk_SB_MT64x64x4_SE_K1, PASSED, 47198.999673128128, 0.69425200167231194, 34, 300, nan, nan, 0, 1, 2019-09-17 09:49:49.339529
++ ERR2=0
++ ERR=0
++ [[ 0 -ne 0 ]]
++ [[ 0 -ne 0 ]]
++ /opt/rocm/bin/rocm-smi -d 0 --resetclocks
+WARNING: No AMD GPUs specified
+No supported devices available to display
+
+
+========================ROCm System Management Interface========================
+==============================End of ROCm SMI Log ==============================
++ /opt/rocm/bin/rocm-smi -d 0 --setfan 50
+WARNING: No AMD GPUs specified
+No supported devices available to display
+
+
+========================ROCm System Management Interface========================
+==============================End of ROCm SMI Log ==============================
++ exit 0
+# Adding Results to Solution Database
+[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||] 100% (0.0 secs elapsed)
+################################################################################
+# Cijk_Ailk_Bljk_SB_00
+# 00_Final: End - 91.912s
+################################################################################
+
+clientExit=0 (PASS) for /home/htony/Source/Tensile/1_MFMA/Tensile/Tensile/Configs/rocblas_sgemm_hip_test.yaml
+
+
+################################################################################
+# Analysing data in 2_BenchmarkData - 91.912s
+################################################################################
+
+# Analyzing: Cijk_Ailk_Bljk_SB
+# Read: /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/2_BenchmarkData/Cijk_Ailk_Bljk_SB_00.yaml
+# Merging Solutions:
+[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||] 100% (0.0 secs elapsed)
+# NumProblemSizes: [0, 0, 0, 0, 0, 0, 0, 0]
+reading datafile /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/2_BenchmarkData/Cijk_Ailk_Bljk_SB_00.csv
+# ExactWinners: {(64, 64, 1, 4, 64, 64, 64, 4): [0, 0.305674]}
+removeLeastImportantSolutions elapsed time = 0.0 secs
+# Solutions Used:
+( 0) Cijk_Ailk_Bljk_SB_MT64x64x4_SE_ : Cijk_Ailk_Bljk_SB_MT64x64x4_SE_APM1_AF0EM1_AF1EM1_AMAS0_ASEM1_BL0_BS1_CDO0_CTDA0_DU4_DTL0_DAF0_DKP0_ETSP_EPS0_FL0_GR2A1_GR2B1_GRCGA1_GRCGB1_GRCVA1_GRCVB1_GRVW1_GSU1_GSUSARR1_GSUWGMRR0_ISA000_IU1_IA0_KLS_LEL1_LPA0_LPB0_LDL1_LR2A1_LR2B1_LW2A1_LW2B1_LDW0_LT1_MTSM64_MTSM1_MO40_MVN256_MVN0_NTA0_NTB0_NTC0_NLCA1_NLCB1_ONLL1_PBD0_PFD1_PG2_PSLn1_PWCn1_PWLn1_PK0_PAP0_PGR1_PLR0_RK0_SGR1_SIA1_SLW1_SU32_SUM0_SUS256_SNLL0_TT4_4_UMF0_USFGRO0_VAW1_VS1_VW1_WG16_16_1_WGM8_WGMTB
+
+[] Tensile::WARNING: [] MultiProblem & NotLastIndex :: nextRule==None; returning
+
+# Score: 0 ms
+# Exact Logic:
+
+{(64, 64, 1, 4, 64, 64, 64, 4): [0, 0.305674]}
+
+
+LogicFiles: ['/home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/3_LibraryLogic/hip_Cijk_Ailk_Bljk_SB.yaml']
++ echo
+
++ echo '################################################################################'
+################################################################################
++ echo '# Configuring CMake for Client'
+# Configuring CMake for Client
++ echo '################################################################################'
+################################################################################
++ cmake -DTensile_RUNTIME_LANGUAGE=HIP -DTensile_CODE_OBJECT_VERSION=V2 -DTensile_COMPILER=hcc -DTensile_RESUME_BENCHMARK=OFF -DTensile_ROOT=/home/htony/Source/Tensile/1_MFMA/Tensile/Tensile -DTensile_CLIENT_BENCHMARK=OFF -DTensile_LOGIC_PATH=/home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/3_LibraryLogic -DTensile_LIBRARY_PRINT_DEBUG=OFF -DTensile_SHORT_FILE_NAMES=OFF -DTENSILE_NEW_CLIENT=OFF -DCMAKE_BUILD_TYPE=Release -DTensile_MERGE_FILES=ON ../source
+-- The C compiler identification is GNU 5.4.0
+-- The CXX compiler identification is GNU 5.4.0
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Tensile_CODE_OBJECT_VERSION from Tensile/Source/CMakeLists.txt: V2
+-- Tensile_COMPILER            from Tensile/Source/CMakeLists.txt: hcc
+-- Making LibraryClient
+-- ENV HIP_PATH = /opt/rocm/include
+-- HIPCC = /opt/rocm/bin/hipcc
+-- Found HIP: /opt/rocm/include  
+-- Found HCC: /opt/rocm/lib/libhsa-runtime64.so  
+-- HCC_FOUND = TRUE
+-- HCC = /opt/rocm/bin/hcc
+-- HCC_INCLUDE_DIRS = /opt/rocm/include/hcc
+-- HSA_LIBRARIES = /opt/rocm/lib/libhsa-runtime64.so
+-- Tensile_CODE_OBJECT_VERSION from TensileCreateLibraryCmake : V2
+-- Tensile_COMPILER            from TensileCreateLibraryCmake : hcc
+-- Tensile_SOURCE_PATH=/home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/4_LibraryClient/build/Tensile
+-- Tensile_CREATE_COMMAND: /home/htony/Source/Tensile/1_MFMA/Tensile/Tensile/bin/TensileCreateLibrary;--merge-files;--no-short-file-names;--no-library-print-debug;--code-object-version=V2;--cxx-compiler=hcc;/home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/3_LibraryLogic;/home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/4_LibraryClient/build/Tensile;HIP
+
+################################################################################
+# Tensile Create Library
+# Restoring default globalParameters
+# Detected local GPU with ISA: gfx908
+# Asm caps for gfx803: HasAddLshl=0 HasExplicitCO=0 HasDirectToLds=1 HasSMulHi=0 MaxVmcnt=15 SupportedISA=1 HasCodeObjectV3=1
+# Arch caps for gfx803:{'HasEccHalf': False}
+# Asm caps for gfx900: HasAddLshl=1 HasExplicitCO=1 HasDirectToLds=1 HasSMulHi=1 MaxVmcnt=63 SupportedISA=1 HasCodeObjectV3=1
+# Arch caps for gfx900:{'HasEccHalf': False}
+# Asm caps for gfx906: HasAddLshl=1 HasExplicitCO=1 HasDirectToLds=1 HasSMulHi=1 MaxVmcnt=63 SupportedISA=1 HasCodeObjectV3=1
+# Arch caps for gfx906:{'HasEccHalf': True}
+# Asm caps for gfx908: HasAddLshl=1 HasExplicitCO=1 HasDirectToLds=1 HasSMulHi=1 MaxVmcnt=63 SupportedISA=1 HasCodeObjectV3=1
+# Arch caps for gfx908:{'HasEccHalf': True}
+# Asm caps for gfx000: HasAddLshl=0 HasExplicitCO=0 HasDirectToLds=0 HasSMulHi=0 MaxVmcnt=0 SupportedISA=0 HasCodeObjectV3=0
+# Arch caps for gfx000:{'HasEccHalf': False}
+Tensile::WARNING: Global parameter EmbedLibrary = None unrecognised.
+# CodeObjectVersion from TensileCreateLibrary: V2
+# CxxCompiler       from TensileCreateLibrary: hcc
+# LibraryLogicFiles:
+#   /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/3_LibraryLogic/hip_Cijk_Ailk_Bljk_SB.yaml
+Reading logic files: Launching 56 threads...
+Reading logic files: Done.
+[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||] 100% (0.0 secs elapsed)
+# Writing Custom CMake
+# Writing Kernels...
+Generating kernels: Launching 56 threads...
+Generating kernels: Done.
+1
+Compiling source kernels: Launching 56 threads...
+Compiling source kernels: Done.
+# Kernel Building elapsed time = 5.3 secs
+# Writing Solutions
+[|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||] 100% (0.0 secs elapsed)
+# Writing Library Logic
+# Tensile Library Writer DONE
+################################################################################
+
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/4_LibraryClient/build
++ echo
+
++ echo '################################################################################'
+################################################################################
++ echo '# Building Client'
+# Building Client
++ echo '################################################################################'
+################################################################################
++ cmake --build . --config Release -- -j 8
+Scanning dependencies of target Tensile
+[ 11%] Building CXX object CMakeFiles/Tensile.dir/Tensile/Tensile.cpp.o
+[ 22%] Building CXX object CMakeFiles/Tensile.dir/Tensile/Solutions.cpp.o
+[ 33%] Building CXX object CMakeFiles/Tensile.dir/Tensile/Kernels.cpp.o
+[ 44%] Building CXX object CMakeFiles/Tensile.dir/Tensile/Tools.cpp.o
+[ 55%] Building CXX object CMakeFiles/Tensile.dir/Tensile/SolutionHelper.cpp.o
+[ 66%] Linking CXX static library libTensile.a
+[ 66%] Built target Tensile
+Scanning dependencies of target client
+[ 77%] Building CXX object CMakeFiles/client.dir/Client.cpp.o
+[ 88%] Building CXX object CMakeFiles/client.dir/MathTemplates.cpp.o
+[100%] Linking CXX executable client
+[100%] Built target client
++ echo
+
++ echo '################################################################################'
+################################################################################
++ echo '# Library Client:'
+# Library Client:
++ echo '# /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/4_LibraryClient/build/client'
+# /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/4_LibraryClient/build/client
++ /home/htony/Source/Tensile/1_MFMA/Tensile/build-64x64-DU4-GM8-PGR/4_LibraryClient/build/client
+################################################################################
+# Device[0]: Device 738c (gfx908)
+# Compute:   1536 GFlop/s (120 CUs @ 100 MHz)
+# Bandwidth: 102 GB/s (4096-bit @ 100 MHz)
+################################################################################
+Tensile Client Columns: GFlops (clock-normalized), GFlops (raw), SolName, KernelMs, ApiUs, Valid/Total, CoreMhz, MemMhz, TempC, FanSpeed, Idx/Total, TimeStamp
+Initializing 67 MBytes.................
+currentElementSizeC=2097152, currentMemorySizeC=2097152
+     1.393,      1.393, Cijk_Ailk_Bljk_SB_MT64x64x4_SE_*,   385.5397, 421122.804, 300, 2049638230412172400, 34.000, 0, 0/1
+
+Fastest: 1.393 GFlop/s 385539.673 us by (0) tensile_Cijk_Ailk_Bljk_SB
++ exit
+
