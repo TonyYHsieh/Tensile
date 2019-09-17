@@ -41,10 +41,10 @@ typedef enum {
 } DataTypeEnum;
 
 // Debug Params
-const unsigned printTensorA=0;
-const unsigned printTensorB=0;
-const unsigned printTensorC=0;
-const unsigned printTensorD=0;
+const unsigned printTensorA=3;
+const unsigned printTensorB=3;
+const unsigned printTensorC=3;
+const unsigned printTensorD=3;
 const bool printWinnersOnly=false;
 
 const char indexChars[19] = "IJKLMNOPQRSTUVWXYZ";

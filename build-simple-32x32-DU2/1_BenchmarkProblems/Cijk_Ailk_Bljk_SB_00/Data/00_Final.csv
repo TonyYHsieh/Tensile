@@ -1,2 +1,2 @@
 GFlops, SizeI, SizeJ, SizeK, SizeL, LDD, LDC, LDA, LDB, TotalFlops, Cijk_Ailk_Bljk_SB_MT32x32x2_SE_
-0, 32, 32, 1, 2, 32, 32, 32, 2, 4096, 0.0433169
+0, 32, 32, 1, 2, 32, 32, 32, 2, 4096, 0.043612
