@@ -41,10 +41,10 @@ typedef enum {
 } DataTypeEnum;
 
 // Debug Params
-const unsigned printTensorA=0;
-const unsigned printTensorB=0;
-const unsigned printTensorC=0;
-const unsigned printTensorD=0;
+const unsigned printTensorA=3;
+const unsigned printTensorB=3;
+const unsigned printTensorC=3;
+const unsigned printTensorD=3;
 const bool printWinnersOnly=false;
 
 const char indexChars[19] = "IJKLMNOPQRSTUVWXYZ";
@@ -81,7 +81,7 @@ const unsigned int maxNumIndices = 4;
 const unsigned int totalIndices[numProblemTypes] = { 4 };
 const unsigned int numProblems = 1;
 const unsigned int problemSizes[numProblems][8] = {
-  {   64,   64,    1,    4,   64,   64,   64,    4 }};
+  {   517,   517,    1,    217,   517,   517,   517,    217 }};
 const unsigned int minStrides[4] = {0, 0, 0, 0};
 /* problem sizes */
 size_t maxSizeD = 5308416;
