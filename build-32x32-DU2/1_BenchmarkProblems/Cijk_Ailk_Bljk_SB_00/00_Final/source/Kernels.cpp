@@ -33,6 +33,9 @@
   /******************************************/
 
 
+typedef float float16 __attribute__((ext_vector_type(16)));
+extern "C" __device__ float16 __llvm_amdgcn_mfma_f32_32x32x2f32(float, float, float16, int, int, int) __asm("llvm.amdgcn.mfma.f32.32x32x2f32");
+
 
 /* tile parameters */
 #define NUM_THREADS  64
@@ -46,6 +49,17 @@
 #define GLOBAL_LOAD_VECTOR_WIDTH_A 1
 #define GLOBAL_LOAD_VECTOR_WIDTH_B 1
 #define GLOBAL_WRITE_VECTOR_WIDTH 1
+
+/* MFMA parameters */
+#define MFMA_M_N 32
+#define MFMA_K 2
+#define MFMA_OUTPUT_VECTOR_WIDTH 4
+#define MFMA_OUTPUT_STRIDE 8
+#define WAVE_SIZE 64
+#define WAVE0I (MT0I/MFMA_M_N)
+#define WAVE1J (MT1J/MFMA_M_N)
+#define MFMA_DATA_TYPE float
+#define MFMA_DEST_DATA_TYPE float16
 
 /* DepthU parameters*/
 #define CPSV (NUM_THREADS / MT0I * VECTOR_WIDTH)
@@ -159,12 +173,18 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
 
   unsigned int serial = hc_get_workitem_id(0);
   unsigned int sgId = serial / (SG0I*SG1J);
+
+  unsigned int waveId  = (serial % (SG0I * SG1J)) / WAVE_SIZE;
+  unsigned int waveIdx = waveId % WAVE0I;
+  unsigned int waveIdy = (waveId / WAVE0I) % WAVE1J;
+
 #define SCALAR_ZERO (float)(0)
 #define SCALAR_OOB_DATA SCALAR_ZERO
   /* registers for MAC's */
   DEST_DATA_TYPE rC[TT0I*TT1J];
-  DATA_TYPE rA[TT0I];
-  DATA_TYPE rB[TT1J];
+  MFMA_DEST_DATA_TYPE* pRC = (MFMA_DEST_DATA_TYPE*)rC;
+  DATA_TYPE rA[1];
+  DATA_TYPE rB[1];
 
   /* registers for global->local */
   DATA_TYPE a_0_0_0_0;
@@ -181,22 +201,27 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
 
   /* local read addresses: tile assignments a */
 
-  unsigned int lr0I = (serial % SG0I);
+  unsigned int lr0I = (serial % MFMA_M_N);
 
 
   /* local read addresses: tile assignments b */
 
-  unsigned int lr1J = (serial / SG0I) % SG1J;
+  unsigned int lr1J = (serial % MFMA_M_N);
+
+
+  /* local read addresses: tile assignments l */
+
+  unsigned int lrL = (serial / MFMA_M_N) % MFMA_K;
 
 
   /* local read addresses: final offsets a */
 
-  unsigned int localReadOffsetA = lr0I*VECTOR_WIDTH + sgId*(MT0I+PAD);
+  unsigned int localReadOffsetA = lr0I + lrL * (MT0I+PAD) + waveIdx * MFMA_M_N + sgId * MFMA_K * (MT0I+PAD);
 
 
   /* local read addresses: final offsets b */
 
-  unsigned int localReadOffsetB = lr1J*VECTOR_WIDTH + sgId*(MT1J+PAD) + LDS_OFFSET_B;
+  unsigned int localReadOffsetB = lr1J + lrL * (MT1J+PAD) + waveIdy * MFMA_M_N + sgId * MFMA_K * (MT1J+PAD) + LDS_OFFSET_B;
 
 
   /* local read addresses: declare addresses a */
@@ -369,6 +394,7 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
   /* declare loop num iterations */
 
   unsigned int numIterL;
+  int numIterL2;
 
 
   rC[0] = SCALAR_ZERO;
@@ -473,52 +499,23 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
 
 
 
-    /* iter 0 */
+
+
+    /* iter 0 (last) */
 
 
     /* local read a */
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
+    rA[0] = localReadA[0];
 
     /* local read b */
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
-
-    /* local read increment a */
-    localReadA += LOCAL_SPLITU*(MT0I+PAD);
-
-    /* local read increment b */
-    localReadB += LOCAL_SPLITU*(MT1J+PAD);
-    MAC_4x4
-
-
-
-
-    /* iter 1 (last) */
-
-
-    /* local read a */
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
-
-    /* local read b */
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
+    rB[0] = localReadB[0];
 
     /* local read init pointers a */
     localReadA = (DATA_TYPE *)(localMemory + localReadOffsetA);
 
     /* local read init pointers b */
     localReadB = (DATA_TYPE *)(localMemory + localReadOffsetB);
-    MAC_4x4
+    pRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);
 
 
     /******************************************/
@@ -534,7 +531,8 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
 
 
   /* Compute tail loop num iter */
-  numIterL = (((sizeL % LOCAL_DEPTHU) + LOCAL_SPLITU - 1) / LOCAL_SPLITU);
+  numIterL  = ((sizeL % (LOCAL_DEPTHU )) + (LOCAL_SPLITU - sgId - 1) * MFMA_K) / (LOCAL_SPLITU * MFMA_K);
+  numIterL2 = (sizeL % LOCAL_DEPTHU) - numIterL * LOCAL_SPLITU * MFMA_K - sgId * MFMA_K;
 
 
   /* remove stagger offsets for tail loop */
@@ -595,31 +593,55 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
 
     /* local read a */
 
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
+    rA[0] = localReadA[0];
 
 
     /* local read b */
 
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
+    rB[0] = localReadB[0];
 
 
     /* local read inc a */
 
-    localReadA += LOCAL_SPLITU*(MT0I+PAD);
+    localReadA += LOCAL_SPLITU*MFMA_K*(MT0I+PAD);
 
 
     /* local read inc b */
 
-    localReadB += LOCAL_SPLITU*(MT1J+PAD);
+    localReadB += LOCAL_SPLITU*MFMA_K*(MT1J+PAD);
 
 
-    MAC_4x4
+    pRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);
+
+  }
+
+
+  /* tail loop: macs */
+
+  while (numIterL2-- > 0) {
+
+
+    /* local read a */
+
+    rA[0] = (lrL==0) ? localReadA[0] : 0;
+
+
+    /* local read b */
+
+    rB[0] = (lrL==0) ? localReadB[0] : 0;
+
+
+    /* local read inc a */
+
+    localReadA += LOCAL_SPLITU*MFMA_K*(MT0I+PAD);
+
+
+    /* local read inc b */
+
+    localReadB += LOCAL_SPLITU*MFMA_K*(MT1J+PAD);
+
+
+    pRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);
 
   }
 
@@ -629,8 +651,8 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
 
   /* not-LocalSplitU: global write indices */
 
-  unsigned int flattenedGlobalC0 = (wg0I)*MT0I + (serial % SG0I)*VECTOR_WIDTH;
-  unsigned int flattenedGlobalC1 = (wg1J)*MT1J + (serial / SG0I)*VECTOR_WIDTH;
+  unsigned int flattenedGlobalC0 = (wg0I)*MT0I + waveIdx * MFMA_M_N + ((serial / MFMA_M_N) % MFMA_K) * MFMA_OUTPUT_VECTOR_WIDTH;
+  unsigned int flattenedGlobalC1 = (wg1J)*MT1J + waveIdy * MFMA_M_N + (serial % MFMA_M_N);
   unsigned int globalC0I = flattenedGlobalC0;
   unsigned int globalC1J = flattenedGlobalC1;
   unsigned int globalCK = (wgK);
@@ -640,100 +662,100 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x2_SE_K1(
 
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  0*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 0 + 0 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 0*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 0*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 0*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[0*VECTOR_WIDTH+0 + (0*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s0, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  1*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 1 + 0 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 0*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 1*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 0*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[1*VECTOR_WIDTH+0 + (0*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s1, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  2*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 2 + 0 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 0*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 2*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 0*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[2*VECTOR_WIDTH+0 + (0*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s2, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  3*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 3 + 0 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 0*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 3*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 0*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[3*VECTOR_WIDTH+0 + (0*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s3, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  0*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 0 + 1 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 1*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 0*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 1*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[0*VECTOR_WIDTH+0 + (1*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s4, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  1*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 1 + 1 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 1*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 1*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 1*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[1*VECTOR_WIDTH+0 + (1*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s5, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  2*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 2 + 1 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 1*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 2*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 1*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[2*VECTOR_WIDTH+0 + (1*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s6, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  3*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 3 + 1 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 1*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 3*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 1*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[3*VECTOR_WIDTH+0 + (1*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s7, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  0*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 0 + 2 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 2*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 0*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 2*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[0*VECTOR_WIDTH+0 + (2*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s8, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  1*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 1 + 2 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 2*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 1*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 2*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[1*VECTOR_WIDTH+0 + (2*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].s9, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  2*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 2 + 2 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 2*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 2*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 2*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[2*VECTOR_WIDTH+0 + (2*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].sa, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  3*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 3 + 2 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 2*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 3*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 2*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[3*VECTOR_WIDTH+0 + (2*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].sb, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  0*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 0 + 3 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 3*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 0*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 3*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[0*VECTOR_WIDTH+0 + (3*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].sc, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  1*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 1 + 3 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 3*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 1*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 3*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[1*VECTOR_WIDTH+0 + (3*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].sd, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  2*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 2 + 3 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 3*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 2*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 3*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[2*VECTOR_WIDTH+0 + (3*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].se, beta) } }
 
   /* new vw0 offset - inc and extract tensor dims */
-  globalC0I =   flattenedGlobalC0 +  3*SG0I*VECTOR_WIDTH;
+  globalC0I =   flattenedGlobalC0 + 3 + 3 * MFMA_OUTPUT_STRIDE;
   /* new vw1 offset - inc and extract tensor dims */
-  globalC1J =   flattenedGlobalC1 + 0 + 3*SG1J*VECTOR_WIDTH;
-  if (flattenedGlobalC0 + 3*SG0I*VECTOR_WIDTH < size0I) {  if (flattenedGlobalC1 + 3*SG1J*VECTOR_WIDTH < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, rC[3*VECTOR_WIDTH+0 + (3*VECTOR_WIDTH+0)*TT0I], beta) } }
+  globalC1J =   flattenedGlobalC1;
+  if (globalC0I < size0I) {  if (globalC1J < size1J) {  TYPE_MAC_WRITE( D[ GLOBAL_D( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], C[ GLOBAL_C( (uint64_t) globalC0I, (uint64_t) globalC1J, (uint64_t) globalCK) ], alpha, pRC[0].sf, beta) } }
 
 
 }
