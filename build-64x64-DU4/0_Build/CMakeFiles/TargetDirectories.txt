@@ -1,0 +1,10 @@
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/CMakeFiles/edit_cache.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/CMakeFiles/rebuild_cache.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/lib/CMakeFiles/edit_cache.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/lib/CMakeFiles/TensileHost.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/lib/CMakeFiles/rebuild_cache.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/lib/CMakeFiles/intrinsics_gen.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/client/CMakeFiles/rebuild_cache.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/client/CMakeFiles/edit_cache.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/client/CMakeFiles/tensile_client.dir
+/home/htony/Source/Tensile/3_MFMA/Tensile/build-64x64-DU4/0_Build/client/CMakeFiles/TensileClient.dir
