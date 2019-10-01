@@ -4283,6 +4283,10 @@ class KernelWriterAssembly(KernelWriter):
     self.vgprPool.checkIn(tmpVgpr)
     return kStr
 
+  def lraTileAssignmentL(self, kernel):
+    kStr = ""
+    return kStr
+
   ##############################################################################
   # Local Read Addresses: Final Offset A/B
   ##############################################################################
@@ -4716,7 +4720,7 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   # Open Loop
   ##############################################################################
-  def openLoop(self, kernel, loopIdx):
+  def openLoop(self, kernel, loopIdx, partIdx=1):
     kStr = ""
     #kStr += "s_endpgm\n"
     tailLoop = loopIdx < 0
@@ -6221,7 +6225,7 @@ class KernelWriterAssembly(KernelWriter):
   # iui = Inner Unroll Idx
   # epsi = expand pointer swap index. Only used for PAP
   ##############################################################################
-  def localReadDo(self, kernel, bufferIdx, iui, epsi, tP):
+  def localReadDo(self, kernel, bufferIdx, iui, epsi, tP, partIdx=1):
 
     tc=tP["tensorChar"]
     if not self.do["LocalRead%s"%tc]: return ""

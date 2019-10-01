@@ -269,6 +269,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       iterCode.addCode(pointerCode)
       iterCode.addCode(waitCode)
       iterCode.addCode(macIterCode)
+
     elif self.scheduleIterAlg == 1:
       #import pdb
       #pdb.set_trace()
@@ -606,7 +607,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
       kl.append(self.lraTileAssignmentA(kernel, tensorParametersA))
       kl.append(self.comment("local read addresses: tile assignments b"))
       kl.append(self.lraTileAssignmentB(kernel, tensorParametersB))
-
+      if self.useMFMA:
+        kl.append(self.comment("local read addresses: tile assignments l"))
+        kl.append(self.lraTileAssignmentL(kernel))
 
       # final offsets
       kl.append(self.comment("local read addresses: final offsets a"))
@@ -791,7 +794,8 @@ class KernelWriter(metaclass=abc.ABCMeta):
       # unrolled loop: mac iterations
       # Includes handling for the 2nd-to-last iteration:
       ############################################################################
-      for u in range(0, kernel["LoopUnroll"]-1):
+      loopUnroll = kernel["LoopUnroll"] // self.MFMA_K if self.useMFMA else kernel["LoopUnroll"]
+      for u in range(0, loopUnroll-1):
         # which loop iteration to reset the LRO,
         # note if PLR=0, isResetLroIter is False for all u
         isResetLroIter = (u == (kernel["LoopUnroll"] - kernel["PrefetchLocalRead"] - 1))
@@ -1043,7 +1047,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       ####################################
       # if prefetch-local: read red for 1st unroll of next iter
       # if not prefetch-local: read for current unroll of current iter
-      unrollIter = kernel["LoopUnroll"]-1
+      unrollIter = loopUnroll-1
       kl.append(self.comment("iter %u (last)"%unrollIter))
       if kernel["PrefetchGlobalRead"] and kernel["PrefetchLocalRead"]:
         if self.enable["Wait"]:
@@ -1239,6 +1243,33 @@ class KernelWriter(metaclass=abc.ABCMeta):
 
       # tail: close
       kl.append(self.closeLoop(kernel, -1, True))
+
+      if self.useMFMA:
+        # tail: macs
+        kl.append(self.comment("tail loop: macs"))
+        kl.append(self.openLoop(kernel, -1, 2))
+        # Try to use InnerUnroll in the tail loop if allowed:
+        tailLoopInnerUnroll = \
+          kernel["InnerUnroll"] if (kernel["AssertSummationElementMultiple"] % kernel["InnerUnroll"]==0) else 1
+
+        for iui in range(0,tailLoopInnerUnroll):
+          if self.enable["LocalRead"]:
+            kl.append(self.comment("local read a"))
+            kl.append(self.localReadDo(kernel, 0, iui, 0, tensorParametersA, 2))
+            kl.append(self.comment("local read b"))
+            kl.append(self.localReadDo(kernel, 0, iui, 0, tensorParametersB, 2))
+            kl.append(self.comment("local read inc a"))
+            kl.append(self.localReadInc(kernel, iui, tensorParametersA))
+            kl.append(self.comment("local read inc b"))
+            kl.append(self.localReadInc(kernel, iui, tensorParametersB))
+        if self.enable["Wait"]:
+          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, -1, -1, 0, "4wait for local read"))
+        if self.enable["MAC"]:
+          kl.append(self.macIter(kernel, 0, tailLoopInnerUnroll, True))
+
+        # tail: close
+        kl.append(self.closeLoop(kernel, -1, True))
+
 
     # extra summation loops: global increment and close
     for i in reversed(list(range(0,kernel["ProblemType"]["NumIndicesSummation"]-1))):
@@ -1760,7 +1791,25 @@ class KernelWriter(metaclass=abc.ABCMeta):
     tensorParametersA["PackedIndices"] = kernel["PackedC0IndicesX"]
     tensorParametersB["PackedIndices"] = kernel["PackedC1IndicesX"]
 
+    currentISA = globalParameters["CurrentISA"]
 
+    self.MFMA_M_N = 32
+    self.MFMA_K  = 2
+    self.MFMAOutputVectorWidth = 4
+    self.MFMAOutputStride = 8
+    self.MFMAInputSize = 1
+    self.MFMAOutputSize = 16
+    self.WaveSize = 64
+
+    self.useMFMA = self.language == "HIP"                               \
+      and globalParameters["AsmCaps"][currentISA]["HasMFMA"]            \
+      and kernel["LoopUnroll"] % self.MFMA_K == 0                       \
+      and kernel["GlobalReadVectorWidth"] == 1                          \
+      and kernel["VectorWidth"] == 1                                    \
+      and kernel["ThreadTile0"] == 4                                    \
+      and kernel["ThreadTile1"] == 4                                    \
+      and kernel["PrefetchGlobalRead"] == False                         \
+      and kernel["PrefetchLocalRead"] == False                          \
   ##############################################################################
   # Open String
   ##############################################################################
@@ -2070,6 +2119,13 @@ class KernelWriter(metaclass=abc.ABCMeta):
     return ""
 
   ##############################################################################
+  # Local Read Addresses: Tile Assignment L
+  ##############################################################################
+  @abc.abstractmethod
+  def lraTileAssignmentL(self, kernel):
+    return ""
+
+  ##############################################################################
   # Local Read Addresses: Final Offset A/B
   ##############################################################################
   @abc.abstractmethod
@@ -2148,7 +2204,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
   # loopIdx<0 : tail loop
   ##############################################################################
   @abc.abstractmethod
-  def openLoop(self, kernel, loopIdx):
+  def openLoop(self, kernel, loopIdx, partIdx=1):
     return ""
 
   ##############################################################################
@@ -2266,7 +2322,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
   # Local Read: Do It A/B
   ##############################################################################
   @abc.abstractmethod
-  def localReadDo(self, kernel, bufferIdx, innerUnrollIndex, epsi, tP):
+  def localReadDo(self, kernel, bufferIdx, innerUnrollIndex, epsi, tP, partIdx=1):
     return ""
 
   ##############################################################################

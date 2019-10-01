@@ -142,6 +142,11 @@ class KernelWriterSource(KernelWriter):
 
     kStr += self.endLine
 
+    if self.useMFMA:
+      kStr += "typedef float float16 __attribute__((ext_vector_type(16)));" + self.endLine
+      kStr += "extern \"C\" __device__ float16 __llvm_amdgcn_mfma_f32_32x32x2f32(float, float, float16, int, int, int) __asm(\"llvm.amdgcn.mfma.f32.32x32x2f32\");" + self.endLine
+      kStr += self.endLine
+
     ####################################
     # kernel preprocessor definitions
     kStr += self.endLine
@@ -168,6 +173,26 @@ class KernelWriterSource(KernelWriter):
     kStr += "#define GLOBAL_WRITE_VECTOR_WIDTH %u%s" \
         % (kernel["GlobalWriteVectorWidth"], self.endLine)
     kStr += self.endLine
+
+    if self.useMFMA:
+      kStr += "/* MFMA parameters */%s" % self.endLine
+      kStr += "#define MFMA_M_N %d%s" % (self.MFMA_M_N, self.endLine)
+      kStr += "#define MFMA_K %d%s" % (self.MFMA_K, self.endLine)
+      kStr += "#define MFMA_OUTPUT_VECTOR_WIDTH %d%s" % (self.MFMAOutputVectorWidth, self.endLine)
+      kStr += "#define MFMA_OUTPUT_STRIDE %d%s" % (self.MFMAOutputStride, self.endLine)
+      kStr += "#define WAVE_SIZE %d%s" % (self.WaveSize, self.endLine)
+      kStr += "#define WAVE%s (MT%s/MFMA_M_N)%s" % (self.tileChar0, self.tileChar0, self.endLine)
+      kStr += "#define WAVE%s (MT%s/MFMA_M_N)%s" % (self.tileChar1, self.tileChar1, self.endLine)
+      if self.MFMAInputSize != 1:
+        kStr += "#define MFMA_DATA_TYPE %s%d%s" %(kernel["ProblemType"]["DataType"].toDevice(self.language), self.MFMAInputSize, self.endLine)
+      else:
+        kStr += "#define MFMA_DATA_TYPE %s%s" %(kernel["ProblemType"]["DataType"].toDevice(self.language), self.endLine)
+      if self.MFMAOutputSize !=1:
+        kStr += "#define MFMA_DEST_DATA_TYPE %s%d%s" % (kernel["ProblemType"]["DestDataType"].toDevice(self.language), self.MFMAOutputSize, self.endLine)
+      else:
+        kStr += "#define MFMA_DEST_DATA_TYPE %s%s" % (kernel["ProblemType"]["DestDataType"].toDevice(self.language), self.endLine)
+      kStr += self.endLine
+
     kStr += "/* DepthU parameters*/%s" % self.endLine
     kStr += "#define CPSV (NUM_THREADS / MT%s * VECTOR_WIDTH)%s" \
         % (self.tileChar0, self.endLine)
@@ -875,6 +900,13 @@ class KernelWriterSource(KernelWriter):
         % (self.getLocalIdStr, self.endLine)
     kStr += "  unsigned int sgId = serial / (SG%s*SG%s);%s" \
         % (self.tileChar0, self.tileChar1, self.endLine)
+    kStr += self.endLine
+
+    if self.useMFMA:
+      kStr += "  unsigned int waveId  = (serial %% (SG0I * SG1J)) / WAVE_SIZE;%s" % self.endLine
+      kStr += "  unsigned int waveIdx = waveId %% WAVE0I;%s" % self.endLine
+      kStr += "  unsigned int waveIdy = (waveId / WAVE0I) %% WAVE1J;%s" % self.endLine
+      kStr += self.endLine
 
     ####################################
     # zero
@@ -903,16 +935,22 @@ class KernelWriterSource(KernelWriter):
         kStr += "  float rC[TT%s*TT%s];%s" \
             % (self.tileChar0, self.tileChar1, self.endLine )
     else:
-        kStr += "  DEST_DATA_TYPE rC[TT%s*TT%s];%s" \
-            % (self.tileChar0, self.tileChar1, self.endLine )
+      kStr += "  DEST_DATA_TYPE rC[TT%s*TT%s];%s" \
+        % (self.tileChar0, self.tileChar1, self.endLine )
+      if self.useMFMA:
+        kStr += "  MFMA_DEST_DATA_TYPE* pRC = (MFMA_DEST_DATA_TYPE*)rC;%s" % self.endLine
 
     # registers for valuAB
-    kStr += "  DATA_TYPE rA[TT%s%s];%s" \
-        % (self.tileChar0, ("*2" if kernel["PrefetchLocalRead"] else ""), \
-        self.endLine)
-    kStr += "  DATA_TYPE rB[TT%s%s];%s" \
-        % (self.tileChar1, ("*2" if kernel["PrefetchLocalRead"] else ""), \
-        self.endLine)
+    if self.useMFMA:
+      kStr += "  DATA_TYPE rA[1];%s" % self.endLine
+      kStr += "  DATA_TYPE rB[1];%s" % self.endLine
+    else:
+      kStr += "  DATA_TYPE rA[TT%s%s];%s" \
+          % (self.tileChar0, ("*2" if kernel["PrefetchLocalRead"] else ""), \
+          self.endLine)
+      kStr += "  DATA_TYPE rB[TT%s%s];%s" \
+          % (self.tileChar1, ("*2" if kernel["PrefetchLocalRead"] else ""), \
+          self.endLine)
 
     ####################################
     # registers for global -> local load
@@ -1526,8 +1564,11 @@ class KernelWriterSource(KernelWriter):
   ##############################################################################
   def lraTileAssignmentA(self, kernel, tP):
     kStr = ""
-    kStr += "  unsigned int lr%s = (serial %% SG%s);%s" \
-        % (tP["tileChar"], self.tileChar0, self.endLine)
+    if self.useMFMA:
+      kStr += "  unsigned int lr%s = (serial %% MFMA_M_N);%s" % (tP["tileChar"], self.endLine)
+    else :
+      kStr += "  unsigned int lr%s = (serial %% SG%s);%s" \
+          % (tP["tileChar"], self.tileChar0, self.endLine)
     return kStr
 
   ##############################################################################
@@ -1535,18 +1576,39 @@ class KernelWriterSource(KernelWriter):
   ##############################################################################
   def lraTileAssignmentB(self, kernel, tP):
     kStr = ""
-    kStr += "  unsigned int lr%s = (serial / SG%s) %% SG%s;%s" \
-        % (tP["tileChar"], self.tileChar0, self.tileChar1, self.endLine)
+    if self.useMFMA:
+      kStr += "  unsigned int lr%s = (serial %% MFMA_M_N);%s" % (tP["tileChar"], self.endLine)
+    else:
+      kStr += "  unsigned int lr%s = (serial / SG%s) %% SG%s;%s" \
+          % (tP["tileChar"], self.tileChar0, self.tileChar1, self.endLine)
     return kStr
+
+  ##############################################################################
+  # Local Read Addresses: Tile Assignment B
+  ##############################################################################
+  def lraTileAssignmentL(self, kernel):
+    kStr = ""
+    if self.useMFMA:
+      kStr += "  unsigned int lr%s = (serial / MFMA_M_N) %% MFMA_K;%s" \
+          % (self.unrollChar, self.endLine)
+    return kStr
+
 
   ##############################################################################
   # Local Read Addresses: Final Offset A
   ##############################################################################
   def lraFinalOffset(self, kernel, tP):
     kStr = ""
-    kStr += "  unsigned int localReadOffset%s = lr%s*VECTOR_WIDTH + sgId*(MT%s+PAD)%s;%s" \
-        % ( tP["tensorChar"], tP["tileChar"], tP["tileChar"], \
-        " + LDS_OFFSET_B" if tP["isB"] else "", self.endLine)
+    if self.useMFMA:
+      kStr += "  unsigned int localReadOffset%s = lr%s + lr%s * (MT%s+PAD) + %s * MFMA_M_N + sgId * MFMA_K * (MT%s+PAD)%s;%s" \
+          % ( tP["tensorChar"], tP["tileChar"], self.unrollChar, tP["tileChar"], \
+          "waveIdy" if tP["isB"] else "waveIdx", tP["tileChar"], \
+          " + LDS_OFFSET_B" if tP["isB"] else "", self.endLine)
+    else:
+      kStr += "  unsigned int localReadOffset%s = lr%s*VECTOR_WIDTH + sgId*(MT%s+PAD)%s;%s" \
+          % ( tP["tensorChar"], tP["tileChar"], tP["tileChar"], \
+          " + LDS_OFFSET_B" if tP["isB"] else "", self.endLine)
+
     return kStr
 
   ##############################################################################
@@ -1592,6 +1654,9 @@ class KernelWriterSource(KernelWriter):
       loopChar = self.indexChars[loopIdx]
       kStr += "%sunsigned int numIter%s;%s" \
           % (self.indent, loopChar, self.endLine)
+      if self.useMFMA:
+        kStr += "%sint numIter%s2;%s" \
+            % (self.indent, loopChar, self.endLine)
     return kStr
 
 
@@ -1765,8 +1830,14 @@ class KernelWriterSource(KernelWriter):
     loopChar = self.indexChars[loopDim]
     if tailLoop:
       kStr += self.endLine + "  /* Compute tail loop num iter */" + self.endLine
-      kStr += "%snumIter%s = (((size%s %% LOCAL_DEPTHU) + LOCAL_SPLITU - 1) / LOCAL_SPLITU);%s" \
-          % (self.indent, self.unrollChar, self.unrollChar, self.endLine)
+      if self.useMFMA:
+        kStr += "%snumIter%s  = ((size%s %% (LOCAL_DEPTHU )) + (LOCAL_SPLITU - sgId - 1) * MFMA_K) / (LOCAL_SPLITU * MFMA_K);%s" \
+            % (self.indent, self.unrollChar, self.unrollChar, self.endLine)
+        kStr += "%snumIter%s2 = (size%s %% LOCAL_DEPTHU) - numIter%s * LOCAL_SPLITU * MFMA_K - sgId * MFMA_K;%s" \
+            % (self.indent, self.unrollChar, self.unrollChar, self.unrollChar, self.endLine)
+      else:
+        kStr += "%snumIter%s = (((size%s %% LOCAL_DEPTHU) + LOCAL_SPLITU - 1) / LOCAL_SPLITU);%s" \
+            % (self.indent, self.unrollChar, self.unrollChar, self.endLine)
       if kernel["GlobalSplitU"] > 1:
         kStr += "%sif (gsuSumIdx != numIterPerWgRemainder) {%s" \
             % (self.indent, self.endLine)
@@ -1814,7 +1885,7 @@ class KernelWriterSource(KernelWriter):
   ##############################################################################
   # Open Loop
   ##############################################################################
-  def openLoop(self, kernel, loopIdx):
+  def openLoop(self, kernel, loopIdx, partIdx=1):
     tailLoop = loopIdx < 0
     if tailLoop:
       loopIdx = self.unrollIdx
@@ -1822,6 +1893,8 @@ class KernelWriterSource(KernelWriter):
     kStr = ""
     loopChar = self.indexChars[ \
         kernel["ProblemType"]["IndicesSummation"][loopIdx]]
+    if partIdx != 1:
+      loopChar += str(partIdx)
     if kernel["LoopDoWhile"]:
       kStr += "%sdo {%s" % (self.indent, self.endLine)
     else:
@@ -1886,12 +1959,15 @@ class KernelWriterSource(KernelWriter):
   ##############################################################################
   def macIter(self, kernel, black, iuiCount, useMacro):
     kStr = ""
-    for iui in range(0,iuiCount):
-        kStr += "%sMAC_%ux%u" % (self.indent, \
-            kernel["ThreadTile0"],kernel["ThreadTile1"])
-        if black:
-          kStr += "_BLK"
-        kStr += self.endLine
+    if self.useMFMA:
+      kStr += "%spRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);%s" % (self.indent, self.endLine)
+    else:
+      for iui in range(0,iuiCount):
+          kStr += "%sMAC_%ux%u" % (self.indent, \
+              kernel["ThreadTile0"],kernel["ThreadTile1"])
+          if black:
+            kStr += "_BLK"
+          kStr += self.endLine
     return kStr
 
   ##############################################################################
@@ -2166,21 +2242,31 @@ class KernelWriterSource(KernelWriter):
   ##############################################################################
   def localReadInc(self, kernel, iui, tP):
     kStr = ""
-    kStr += "%slocalRead%s += LOCAL_SPLITU*(MT%s+PAD);%s" \
-        % (self.indent, tP["tensorChar"], tP["tileChar"], self.endLine)
+    if self.useMFMA:
+      kStr += "%slocalRead%s += LOCAL_SPLITU*MFMA_K*(MT%s+PAD);%s" \
+          % (self.indent, tP["tensorChar"], tP["tileChar"], self.endLine)
+    else:
+      kStr += "%slocalRead%s += LOCAL_SPLITU*(MT%s+PAD);%s" \
+          % (self.indent, tP["tensorChar"], tP["tileChar"], self.endLine)
     return kStr
 
   ##############################################################################
   # Local Read: Do It A/B
   ##############################################################################
-  def localReadDo(self, kernel, black, iui, epsi, tP):
+  def localReadDo(self, kernel, black, iui, epsi, tP, partIdx=1):
     kStr = ""
-    for r in range(0, kernel[tP["tt"]]//kernel["VectorWidth"]):
-      for s in range(0, kernel["VectorWidth"]):
-        kStr += "%sr%s[%u*VECTOR_WIDTH+%u%s] = localRead%s[%u*SG%s*VECTOR_WIDTH + %u]; %s" \
-            % (self.indent, tP["tensorChar"], r, s, \
-            (("+TT%s"%tP["tileChar"]) if black else ""), \
-            tP["tensorChar"], r, tP["tileChar"], s, self.endLine)
+    if self.useMFMA:
+      if partIdx==1:
+        kStr += "%sr%s[0] = localRead%s[0];%s" %(self.indent, tP["tensorChar"], tP["tensorChar"], self.endLine)
+      else:
+        kStr += "%sr%s[0] = (lr%s==0) ? localRead%s[0] : 0;%s" %(self.indent, tP["tensorChar"], self.unrollChar, tP["tensorChar"], self.endLine)
+    else:
+      for r in range(0, kernel[tP["tt"]]//kernel["VectorWidth"]):
+        for s in range(0, kernel["VectorWidth"]):
+          kStr += "%sr%s[%u*VECTOR_WIDTH+%u%s] = localRead%s[%u*SG%s*VECTOR_WIDTH + %u]; %s" \
+              % (self.indent, tP["tensorChar"], r, s, \
+              (("+TT%s"%tP["tileChar"]) if black else ""), \
+              tP["tensorChar"], r, tP["tileChar"], s, self.endLine)
     return kStr
 
   ##############################################################################
@@ -2304,15 +2390,27 @@ class KernelWriterSource(KernelWriter):
     kStr = ""
     kStr += "  %sDATA_TYPE *localLocalSplitU = (%sDATA_TYPE *)(localMemory);%s" \
       % (self.sharedPtrStr, self.sharedPtrStr, self.endLine)
-    for j in range(0, kernel["ThreadTile1"] // kernel["VectorWidth"]):
-      for i in range(0, kernel["ThreadTile0"] // kernel["VectorWidth"]):
-        for s in range(0, kernel["VectorWidth"]):
-          for vc in range(0, kernel["VectorWidth"]):
-            kStr += "%slocalLocalSplitU[%u + (lr%s + %u*SG%s + (MT%s/VECTOR_WIDTH)*(lr%s*VECTOR_WIDTH + %u + SG%s*VECTOR_WIDTH*%u) + (MT%s*MT%s/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[%u + (%u+%u*(TT%s/VECTOR_WIDTH)+%u*TT%s)*VECTOR_WIDTH];%s" \
-              % (self.indent, vc, self.tileChar0, i, self.tileChar0, \
-                self.tileChar0, self.tileChar1, \
-                s, self.tileChar1, j, self.tileChar0, self.tileChar1, vc, i, s, \
-                self.tileChar0, j, self.tileChar0, self.endLine)
+
+    outloop = self.MFMAOutputSize//self.MFMAOutputVectorWidth if self.useMFMA else kernel["ThreadTile1"]//kernel["VectorWidth"]
+    inloop = self.MFMAOutputVectorWidth if self.useMFMA else kernel["ThreadTile0"]//kernel["VectorWidth"]
+
+    if self.useMFMA:
+      for j in range(0, self.MFMAOutputSize//self.MFMAOutputVectorWidth):
+        for i in range(0, self.MFMAOutputVectorWidth):
+          for s in range(0, kernel["VectorWidth"]):
+            for vc in range(0, kernel["VectorWidth"]):
+              kStr += "%slocalLocalSplitU[(%u + lrL * MFMA_OUTPUT_VECTOR_WIDTH + %u * MFMA_OUTPUT_STRIDE) + (lr%s + waveIdy * MFMA_M_N) * MT%s + (sgId * (MT%s*MT%s))] = rC[%u];%s" \
+                % (self.indent, i, j, self.tileChar0, self.tileChar0, self.tileChar0, self.tileChar1, j*self.MFMAOutputVectorWidth+i, self.endLine)
+    else:
+      for j in range(0, kernel["ThreadTile1"] // kernel["VectorWidth"]):
+        for i in range(0, kernel["ThreadTile0"] // kernel["VectorWidth"]):
+          for s in range(0, kernel["VectorWidth"]):
+            for vc in range(0, kernel["VectorWidth"]):
+              kStr += "%slocalLocalSplitU[%u + (lr%s + %u*SG%s + (MT%s/VECTOR_WIDTH)*(lr%s*VECTOR_WIDTH + %u + SG%s*VECTOR_WIDTH*%u) + (MT%s*MT%s/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[%u + (%u+%u*(TT%s/VECTOR_WIDTH)+%u*TT%s)*VECTOR_WIDTH];%s" \
+                % (self.indent, vc, self.tileChar0, i, self.tileChar0, \
+                  self.tileChar0, self.tileChar1, \
+                  s, self.tileChar1, j, self.tileChar0, self.tileChar1, vc, i, s, \
+                  self.tileChar0, j, self.tileChar0, self.endLine)
     kStr += self.indent + self.syncStr + self.endLine
     """
 
@@ -2526,13 +2624,19 @@ class KernelWriterSource(KernelWriter):
 
     # Add Index0 and Index1:
     index0 = kernel["ProblemType"]["Index0"]
-    kStr += "  unsigned int flattenedGlobalC0 = "
-    kStr += "(wg%s)*MT%s + (serial %% SG%s)*VECTOR_WIDTH;%s" \
-            % (self.indexChars[index0], self.tileChar0, self.tileChar0, self.endLine)
-
     index1 = kernel["ProblemType"]["Index1"]
-    kStr += "  unsigned int flattenedGlobalC1 = "
-    kStr += "(wg%s)*MT%s + (serial / SG%s)*VECTOR_WIDTH;%s" \
+    if self.useMFMA:
+      kStr += "  unsigned int flattenedGlobalC0 = (wg%s)*MT%s + waveIdx * MFMA_M_N + ((serial / MFMA_M_N) %% MFMA_K) * MFMA_OUTPUT_VECTOR_WIDTH;%s" \
+              % (self.tileChar0, self.tileChar0, self.endLine)
+      kStr += "  unsigned int flattenedGlobalC1 = (wg%s)*MT%s + waveIdy * MFMA_M_N + (serial %% MFMA_M_N);%s" \
+              % (self.tileChar1, self.tileChar1, self.endLine)
+    else:
+      kStr += "  unsigned int flattenedGlobalC0 = "
+      kStr += "(wg%s)*MT%s + (serial %% SG%s)*VECTOR_WIDTH;%s" \
+              % (self.indexChars[index0], self.tileChar0, self.tileChar0, self.endLine)
+
+      kStr += "  unsigned int flattenedGlobalC1 = "
+      kStr += "(wg%s)*MT%s + (serial / SG%s)*VECTOR_WIDTH;%s" \
             % (self.indexChars[index1], self.tileChar1, self.tileChar0, self.endLine)
 
     for i in range(0, kernel["ProblemType"]["NumIndicesC"]):
@@ -2558,18 +2662,28 @@ class KernelWriterSource(KernelWriter):
     packGranularity = kernel["PackGranularity"]
     addTensorDimCheck0 = addTensorDimCheck1 = 0
 
-    for b in range(0, kernel["ThreadTile1"]//kernel["VectorWidth"]):
-      for a in range(0, kernel["ThreadTile0"]//kernel["VectorWidth"]):
+    outloop = self.MFMAOutputSize//self.MFMAOutputVectorWidth if self.useMFMA else kernel["ThreadTile1"]//kernel["VectorWidth"]
+    inloop = self.MFMAOutputVectorWidth if self.useMFMA else kernel["ThreadTile0"]//kernel["VectorWidth"]
+
+    for b in range(0, outloop):
+      for a in range(0, inloop):
         if packGranularity==2:
           addTensorDimCheck0 = 1
-          base0 = " %u*SG%s*VECTOR_WIDTH" % (a,self.tileChar0)
+          if self.useMFMA:
+            base0 = "%u + %u * MFMA_OUTPUT_STRIDE" % (a, b)
+          else:
+            base0 = " %u*SG%s*VECTOR_WIDTH" % (a,self.tileChar0)
         for s1 in range(0, kernel["VectorWidth"]):
           if packGranularity==2:
             addTensorDimCheck1 = 1
-            base1 = "%u + %u*SG%s*VECTOR_WIDTH" % (s1, b,self.tileChar1)
+            if self.useMFMA:
+              base1 = ""
+            else:
+              base1 = "%u + %u*SG%s*VECTOR_WIDTH" % (s1, b,self.tileChar1)
             offsetS1 = ""
           else:
             offsetS1 = ((" + %u"%s1) if kernel["VectorWidth"]>1 else "")
+
           for s0 in range(0, kernel["VectorWidth"]):
             # set default offsets, may be overridden in packed mode:
             offsetS0 = ((" + %u"%s0) if kernel["VectorWidth"]>1 else "")
@@ -2606,20 +2720,14 @@ class KernelWriterSource(KernelWriter):
               size0ForCheck = " * ".join(self.tPA["packedSizeList"])
 
               # Check 0 dimension against appropriate size limit
-              kStr += "  if (%s%s + %u*SG%s*VECTOR_WIDTH < %s) {" \
-                  % (globalC0ForCheck,
-                  ((" + %u"%s0) if kernel["VectorWidth"]>1 else ""), \
-                  a, self.tileChar0, size0ForCheck)
+              kStr += "  if (globalC%s < %s) {" % (self.indexChars[0], size0ForCheck)
 
               if packGranularity == 2:
                 offset1 = offsetS1
               globalC1ForCheck = "flattenedGlobalC1"
               size1ForCheck = " * ".join(self.tPB["packedSizeList"])
 
-              kStr += "  if (%s%s + %u*SG%s*VECTOR_WIDTH < %s) {" \
-                  % (globalC1ForCheck,
-                  ((" + %u"%s1) if kernel["VectorWidth"]>1 else ""), \
-                  b, self.tileChar1, size1ForCheck)
+              kStr += "  if (globalC%s < %s) {" % (self.indexChars[1], size1ForCheck)
 
             # Write the result
             kStr += "  TYPE_MAC_WRITE( D[ GLOBAL_D( (%s)" % self.uint64Str
@@ -2650,8 +2758,11 @@ class KernelWriterSource(KernelWriter):
             #    % (a, s1, self.tileChar0, b, self.tileChar0, \
             #    ((".%s"%self.vectorComponents[s0]) if kernel["VectorWidth"]>1\
             #    else "") )
-            kStr += ", rC[%u*VECTOR_WIDTH+%u + (%u*VECTOR_WIDTH+%u)*TT%s]" \
-                % (a, s0, b, s1, self.tileChar0 )
+            if self.useMFMA:
+              kStr += ", pRC[0].s%x" % (b * inloop + a)
+            else:
+              kStr += ", rC[%u*VECTOR_WIDTH+%u + (%u*VECTOR_WIDTH+%u)*TT%s]" \
+                  % (a, s0, b, s1, self.tileChar0 )
             if kernel["ProblemType"]["UseBeta"]:
               kStr += ", beta"
             kStr += ")"

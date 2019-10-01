@@ -133,7 +133,7 @@ globalParameters["MaxLDS"] = 65536                # max LDS a kernel should atte
 globalParameters["MaxDepthU"] = 256               # max DepthU value to allow
 globalParameters["ShortNames"] = False            # on windows kernel names can get too long; =True will convert solution/kernel names to serial ids
 globalParameters["MergeFiles"] = True             # F=store every solution and kernel in separate file; T=store all solutions in single file
-globalParameters["SupportedISA"] = [(8,0,3), (9,0,0), (9,0,6), (9,0,8)]             # assembly kernels writer supports these architectures
+globalParameters["SupportedISA"] = [(9,0,8)]             # assembly kernels writer supports these architectures
 globalParameters["ClientBuildPath"] = "0_Build"                   # subdirectory for host code build directory.
 globalParameters["NewClient"] = 1                                 # Run new client
 globalParameters["BenchmarkProblemsPath"] = "1_BenchmarkProblems" # subdirectory for benchmarking phases
@@ -1047,6 +1047,7 @@ def assignGlobalParameters( config ):
     globalParameters["AsmCaps"][v]["HasAddLshl"] = tryAssembler(isaVersion, "", "v_add_lshl_u32 v47, v36, v34, 0x2")
     globalParameters["AsmCaps"][v]["HasSMulHi"] = tryAssembler(isaVersion, "", "s_mul_hi_u32 s47, s36, s34")
     globalParameters["AsmCaps"][v]["HasCodeObjectV3"] = tryAssembler(isaVersion, "-mno-code-object-v3", "")
+    globalParameters["AsmCaps"][v]["HasMFMA"] = tryAssembler(isaVersion, "-mno-code-object-v3", "v_mfma_f32_32x32x2f32 a[0:15], v31, v32, a[0:15]")
     if tryAssembler(isaVersion, "", "s_waitcnt vmcnt(63)"):
       globalParameters["AsmCaps"][v]["MaxVmcnt"] = 63
     elif tryAssembler(isaVersion, "", "s_waitcnt vmcnt(15)"):
