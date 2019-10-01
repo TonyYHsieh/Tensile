@@ -33,6 +33,9 @@
   /******************************************/
 
 
+typedef float float16 __attribute__((ext_vector_type(16)));
+extern "C" __device__ float16 __llvm_amdgcn_mfma_f32_32x32x2f32(float, float, float16, int, int, int) __asm("llvm.amdgcn.mfma.f32.32x32x2f32");
+
 
 /* tile parameters */
 #define NUM_THREADS 256
@@ -46,6 +49,17 @@
 #define GLOBAL_LOAD_VECTOR_WIDTH_A 1
 #define GLOBAL_LOAD_VECTOR_WIDTH_B 1
 #define GLOBAL_WRITE_VECTOR_WIDTH 1
+
+/* MFMA parameters */
+#define MFMA_M_N 32
+#define MFMA_K 2
+#define MFMA_OUTPUT_VECTOR_WIDTH 4
+#define MFMA_OUTPUT_STRIDE 8
+#define WAVE_SIZE 64
+#define WAVE0I (MT0I/MFMA_M_N)
+#define WAVE1J (MT1J/MFMA_M_N)
+#define MFMA_DATA_TYPE float
+#define MFMA_DEST_DATA_TYPE float16
 
 /* DepthU parameters*/
 #define CPSV (NUM_THREADS / MT0I * VECTOR_WIDTH)
@@ -159,12 +173,18 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x16_SE_K1(
 
   unsigned int serial = hc_get_workitem_id(0);
   unsigned int sgId = serial / (SG0I*SG1J);
+
+  unsigned int waveId  = (serial % (SG0I * SG1J)) / WAVE_SIZE;
+  unsigned int waveIdx = waveId % WAVE0I;
+  unsigned int waveIdy = (waveId / WAVE0I) % WAVE1J;
+
 #define SCALAR_ZERO (float)(0)
 #define SCALAR_OOB_DATA SCALAR_ZERO
   /* registers for MAC's */
   DEST_DATA_TYPE rC[TT0I*TT1J];
-  DATA_TYPE rA[TT0I];
-  DATA_TYPE rB[TT1J];
+  MFMA_DEST_DATA_TYPE* pRC = (MFMA_DEST_DATA_TYPE*)rC;
+  DATA_TYPE rA[1];
+  DATA_TYPE rB[1];
 
   /* registers for global->local */
   DATA_TYPE a_0_0_0_0;
@@ -183,22 +203,27 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x16_SE_K1(
 
   /* local read addresses: tile assignments a */
 
-  unsigned int lr0I = (serial % SG0I);
+  unsigned int lr0I = (serial % MFMA_M_N);
 
 
   /* local read addresses: tile assignments b */
 
-  unsigned int lr1J = (serial / SG0I) % SG1J;
+  unsigned int lr1J = (serial % MFMA_M_N);
+
+
+  /* local read addresses: tile assignments l */
+
+  unsigned int lrL = (serial / MFMA_M_N) % MFMA_K;
 
 
   /* local read addresses: final offsets a */
 
-  unsigned int localReadOffsetA = lr0I*VECTOR_WIDTH + sgId*(MT0I+PAD);
+  unsigned int localReadOffsetA = lr0I + lrL * (MT0I+PAD) + waveIdx * MFMA_M_N + sgId * MFMA_K * (MT0I+PAD);
 
 
   /* local read addresses: final offsets b */
 
-  unsigned int localReadOffsetB = lr1J*VECTOR_WIDTH + sgId*(MT1J+PAD) + LDS_OFFSET_B;
+  unsigned int localReadOffsetB = lr1J + lrL * (MT1J+PAD) + waveIdy * MFMA_M_N + sgId * MFMA_K * (MT1J+PAD) + LDS_OFFSET_B;
 
 
   /* local read addresses: declare addresses a */
@@ -386,6 +411,7 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x16_SE_K1(
   /* declare loop num iterations */
 
   unsigned int numIterL;
+  int numIterL2;
 
 
   rC[0] = SCALAR_ZERO;
@@ -508,94 +534,36 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x16_SE_K1(
 
 
     /* local read a */
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
+    rA[0] = localReadA[0];
 
     /* local read b */
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
+    rB[0] = localReadB[0];
 
     /* local read increment a */
-    localReadA += LOCAL_SPLITU*(MT0I+PAD);
+    localReadA += LOCAL_SPLITU*MFMA_K*(MT0I+PAD);
 
     /* local read increment b */
-    localReadB += LOCAL_SPLITU*(MT1J+PAD);
-    MAC_4x4
+    localReadB += LOCAL_SPLITU*MFMA_K*(MT1J+PAD);
+    pRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);
 
 
-    /* iter 1 */
+
+
+    /* iter 1 (last) */
 
 
     /* local read a */
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
+    rA[0] = localReadA[0];
 
     /* local read b */
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
-
-    /* local read increment a */
-    localReadA += LOCAL_SPLITU*(MT0I+PAD);
-
-    /* local read increment b */
-    localReadB += LOCAL_SPLITU*(MT1J+PAD);
-    MAC_4x4
-
-
-    /* iter 2 */
-
-
-    /* local read a */
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
-
-    /* local read b */
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
-
-    /* local read increment a */
-    localReadA += LOCAL_SPLITU*(MT0I+PAD);
-
-    /* local read increment b */
-    localReadB += LOCAL_SPLITU*(MT1J+PAD);
-    MAC_4x4
-
-
-
-
-    /* iter 3 (last) */
-
-
-    /* local read a */
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
-
-    /* local read b */
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
+    rB[0] = localReadB[0];
 
     /* local read init pointers a */
     localReadA = (DATA_TYPE *)(localMemory + localReadOffsetA);
 
     /* local read init pointers b */
     localReadB = (DATA_TYPE *)(localMemory + localReadOffsetB);
-    MAC_4x4
+    pRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);
 
 
     /******************************************/
@@ -611,7 +579,8 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x16_SE_K1(
 
 
   /* Compute tail loop num iter */
-  numIterL = (((sizeL % LOCAL_DEPTHU) + LOCAL_SPLITU - 1) / LOCAL_SPLITU);
+  numIterL  = ((sizeL % (LOCAL_DEPTHU )) + (LOCAL_SPLITU - sgId - 1) * MFMA_K) / (LOCAL_SPLITU * MFMA_K);
+  numIterL2 = (sizeL % LOCAL_DEPTHU) - numIterL * LOCAL_SPLITU * MFMA_K - sgId * MFMA_K;
 
 
   /* remove stagger offsets for tail loop */
@@ -680,31 +649,55 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x16_SE_K1(
 
     /* local read a */
 
-    rA[0*VECTOR_WIDTH+0] = localReadA[0*SG0I*VECTOR_WIDTH + 0]; 
-    rA[1*VECTOR_WIDTH+0] = localReadA[1*SG0I*VECTOR_WIDTH + 0]; 
-    rA[2*VECTOR_WIDTH+0] = localReadA[2*SG0I*VECTOR_WIDTH + 0]; 
-    rA[3*VECTOR_WIDTH+0] = localReadA[3*SG0I*VECTOR_WIDTH + 0]; 
+    rA[0] = localReadA[0];
 
 
     /* local read b */
 
-    rB[0*VECTOR_WIDTH+0] = localReadB[0*SG1J*VECTOR_WIDTH + 0]; 
-    rB[1*VECTOR_WIDTH+0] = localReadB[1*SG1J*VECTOR_WIDTH + 0]; 
-    rB[2*VECTOR_WIDTH+0] = localReadB[2*SG1J*VECTOR_WIDTH + 0]; 
-    rB[3*VECTOR_WIDTH+0] = localReadB[3*SG1J*VECTOR_WIDTH + 0]; 
+    rB[0] = localReadB[0];
 
 
     /* local read inc a */
 
-    localReadA += LOCAL_SPLITU*(MT0I+PAD);
+    localReadA += LOCAL_SPLITU*MFMA_K*(MT0I+PAD);
 
 
     /* local read inc b */
 
-    localReadB += LOCAL_SPLITU*(MT1J+PAD);
+    localReadB += LOCAL_SPLITU*MFMA_K*(MT1J+PAD);
 
 
-    MAC_4x4
+    pRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);
+
+  }
+
+
+  /* tail loop: macs */
+
+  while (numIterL2-- > 0) {
+
+
+    /* local read a */
+
+    rA[0] = (lrL==0) ? localReadA[0] : 0;
+
+
+    /* local read b */
+
+    rB[0] = (lrL==0) ? localReadB[0] : 0;
+
+
+    /* local read inc a */
+
+    localReadA += LOCAL_SPLITU*MFMA_K*(MT0I+PAD);
+
+
+    /* local read inc b */
+
+    localReadB += LOCAL_SPLITU*MFMA_K*(MT1J+PAD);
+
+
+    pRC[0] = __llvm_amdgcn_mfma_f32_32x32x2f32(rA[0], rB[0], pRC[0], 0, 0, 0);
 
   }
 
@@ -722,22 +715,22 @@ __global__ void Cijk_Ailk_Bljk_SB_MT32x32x16_SE_K1(
   /* LocalSplitU: local write */
 
   DATA_TYPE *localLocalSplitU = (DATA_TYPE *)(localMemory);
-  localLocalSplitU[0 + (lr0I + 0*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*0) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (0+0*(TT0I/VECTOR_WIDTH)+0*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 1*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*0) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (1+0*(TT0I/VECTOR_WIDTH)+0*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 2*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*0) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (2+0*(TT0I/VECTOR_WIDTH)+0*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 3*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*0) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (3+0*(TT0I/VECTOR_WIDTH)+0*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 0*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*1) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (0+0*(TT0I/VECTOR_WIDTH)+1*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 1*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*1) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (1+0*(TT0I/VECTOR_WIDTH)+1*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 2*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*1) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (2+0*(TT0I/VECTOR_WIDTH)+1*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 3*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*1) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (3+0*(TT0I/VECTOR_WIDTH)+1*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 0*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*2) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (0+0*(TT0I/VECTOR_WIDTH)+2*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 1*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*2) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (1+0*(TT0I/VECTOR_WIDTH)+2*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 2*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*2) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (2+0*(TT0I/VECTOR_WIDTH)+2*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 3*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*2) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (3+0*(TT0I/VECTOR_WIDTH)+2*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 0*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*3) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (0+0*(TT0I/VECTOR_WIDTH)+3*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 1*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*3) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (1+0*(TT0I/VECTOR_WIDTH)+3*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 2*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*3) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (2+0*(TT0I/VECTOR_WIDTH)+3*TT0I)*VECTOR_WIDTH];
-  localLocalSplitU[0 + (lr0I + 3*SG0I + (MT0I/VECTOR_WIDTH)*(lr1J*VECTOR_WIDTH + 0 + SG1J*VECTOR_WIDTH*3) + (MT0I*MT1J/VECTOR_WIDTH)*sgId)*VECTOR_WIDTH] = rC[0 + (3+0*(TT0I/VECTOR_WIDTH)+3*TT0I)*VECTOR_WIDTH];
+  localLocalSplitU[(0 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 0 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[0];
+  localLocalSplitU[(1 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 0 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[1];
+  localLocalSplitU[(2 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 0 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[2];
+  localLocalSplitU[(3 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 0 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[3];
+  localLocalSplitU[(0 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 1 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[4];
+  localLocalSplitU[(1 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 1 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[5];
+  localLocalSplitU[(2 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 1 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[6];
+  localLocalSplitU[(3 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 1 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[7];
+  localLocalSplitU[(0 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 2 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[8];
+  localLocalSplitU[(1 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 2 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[9];
+  localLocalSplitU[(2 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 2 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[10];
+  localLocalSplitU[(3 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 2 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[11];
+  localLocalSplitU[(0 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 3 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[12];
+  localLocalSplitU[(1 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 3 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[13];
+  localLocalSplitU[(2 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 3 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[14];
+  localLocalSplitU[(3 + lrL * MFMA_OUTPUT_VECTOR_WIDTH + 3 * MFMA_OUTPUT_STRIDE) + (lr0I + waveIdy * MFMA_M_N) * MT0I + (sgId * (MT0I*MT1J))] = rC[15];
   __syncthreads();
 
 
