@@ -513,34 +513,42 @@ s_waitcnt lgkmcnt(0)                               // wait for 144 bytes of kern
 
 /* local read addresses: tile assignments a */
 
-/*lr0I = serial % SG0I*/
-v_lshrrev_b32 v0, 3, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / 8
-v_and_b32 v1, 7, v[vgprSerial]                     // vectorStaticDiv: v1 = v[vgprSerial] % 8
+/*lr0I = serial % MFMA_MN*/
+v_lshrrev_b32 v0, 5, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / 32(MFMA_MN)
+v_and_b32 v1, 31, v[vgprSerial]                    // vectorStaticDiv: v1 = v[vgprSerial] % 32(MFMA_MN)
 
 
 /* local read addresses: tile assignments b */
 
-/*lr1J = (serial / SG1J) % SG1J*/
-v_lshrrev_b32 v2, 3, v0                            // vectorStaticDiv: v2 = v0 / 8
-v_and_b32 v3, 7, v0                                // vectorStaticDiv: v3 = v0 % 8
+/*lr1J = (serial / MFMA_MN) % MFMA_K*/
+v_lshrrev_b32 v2, 1, v0                            // vectorStaticDiv: v2 = v0 / 2(MFMA_K)
+v_and_b32 v3, 1, v0                                // vectorStaticDiv: v3 = v0 % 2(MFMA_K)
+
+// ----- Tony comment -----
+// v1 lr0I
+// v2 sgId
+// v3 lr1J
 
 
 /* local read addresses: final offsets a */
-
+// v[vgprLocalReadAddrA] = sgid * (MT1+PAD) * MFMA_K + ((lid / MFMA_MN) * (MT1+PAD)) + (lid % MFMA_MN)
+v_mul_lo_u32 v4, v3, 0x20
+v_add_u32 v4, v4, v1                               // v1 = lr0I + lr1J * (MT0+PAD)
 v_lshrrev_b32 v0, 6, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / 64
 v_and_b32 v2, 63, v[vgprSerial]                    // vectorStaticDiv: v2 = v[vgprSerial] % 64
-s_mov_b32 s77, 0x20                                // MT0+PAD
+s_mov_b32 s77, 0x40                                // MT0+PAD
 v_mul_lo_u32 v0, s77, v0                           // sgid=sgid*(MT0+PAD)
-_v_add_lshl_u32 v[vgprLocalReadAddrA], v0, v1, 0x2 // o = (lroA*VW+sgid*MT0)*bpe
+_v_add_lshl_u32 v[vgprLocalReadAddrA], v0, v4, 0x2 // o = (lroA*VW+sgid*MT0)*bpe
 
 
 /* local read addresses: final offsets b */
-
+v_mul_lo_u32 v4, v3, 0x20
+v_add_u32 v4, v4, v1                               // v1 = lr0I + lr1J * (MT0+PAD)
 v_lshrrev_b32 v0, 6, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / 64
 v_and_b32 v1, 63, v[vgprSerial]                    // vectorStaticDiv: v1 = v[vgprSerial] % 64
-s_mov_b32 s77, 0x20                                // MT1+PAD
+s_mov_b32 s77, 0x40                                // MT1+PAD
 v_mul_lo_u32 v0, s77, v0                           // sgid=sgid*(MT1+PAD)
-_v_add_lshl_u32 v[vgprLocalReadAddrB], v0, v3, 0x2 // o = (lroB*VW+sgid*MT1)*bpe
+_v_add_lshl_u32 v[vgprLocalReadAddrB], v0, v4, 0x2 // o = (lroB*VW+sgid*MT1)*bpe
 
 
 /* local read addresses: declare addresses a */
@@ -729,22 +737,22 @@ _v_add_co_u32 v[vgprLocalWriteAddrB], vcc, 0x400, v[vgprLocalWriteAddrB] // lwFO
 /* declare loop num iterations */
 
 
-v_mov_b32 v[vgprValuC+0], 0x0                      // initC
-v_mov_b32 v[vgprValuC+1], 0x0                      // initC
-v_mov_b32 v[vgprValuC+2], 0x0                      // initC
-v_mov_b32 v[vgprValuC+3], 0x0                      // initC
-v_mov_b32 v[vgprValuC+4], 0x0                      // initC
-v_mov_b32 v[vgprValuC+5], 0x0                      // initC
-v_mov_b32 v[vgprValuC+6], 0x0                      // initC
-v_mov_b32 v[vgprValuC+7], 0x0                      // initC
-v_mov_b32 v[vgprValuC+8], 0x0                      // initC
-v_mov_b32 v[vgprValuC+9], 0x0                      // initC
-v_mov_b32 v[vgprValuC+10], 0x0                     // initC
-v_mov_b32 v[vgprValuC+11], 0x0                     // initC
-v_mov_b32 v[vgprValuC+12], 0x0                     // initC
-v_mov_b32 v[vgprValuC+13], 0x0                     // initC
-v_mov_b32 v[vgprValuC+14], 0x0                     // initC
-v_mov_b32 v[vgprValuC+15], 0x0                     // initC
+v_accvgpr_write_b32 a0,  0x0
+v_accvgpr_write_b32 a1,  0x0
+v_accvgpr_write_b32 a2,  0x0
+v_accvgpr_write_b32 a3,  0x0
+v_accvgpr_write_b32 a4,  0x0
+v_accvgpr_write_b32 a5,  0x0
+v_accvgpr_write_b32 a6,  0x0
+v_accvgpr_write_b32 a7,  0x0
+v_accvgpr_write_b32 a8,  0x0
+v_accvgpr_write_b32 a9,  0x0
+v_accvgpr_write_b32 a10, 0x0
+v_accvgpr_write_b32 a11, 0x0
+v_accvgpr_write_b32 a12, 0x0
+v_accvgpr_write_b32 a13, 0x0
+v_accvgpr_write_b32 a14, 0x0
+v_accvgpr_write_b32 a15, 0x0
 
 s_lshr_b32 s[sgprLoopCounters+0], s[sgprSizesSum+0], 3 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 8
 s_mov_b32 s[sgprOrigLoopCounter], s[sgprLoopCounters+0] // copy loop counter
@@ -870,17 +878,11 @@ s_waitcnt lgkmcnt(0)                               // 2prefetch wait for local w
 /* prefetch local a */
 
 ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:32 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:96 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
 
 
 /* prefetch local b */
 
 ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:32 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:96 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read increment a */
 
@@ -890,161 +892,55 @@ ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:96 // L -> Reg lr
 
 /* N/A, lro->32 */
 
-
-
-
-/* iter 0 */
-
-
-/* local read a */
-ds_read_b32 v[vgprValuA_X1_I0+0], v[vgprLocalReadAddrA] offset:128 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+1], v[vgprLocalReadAddrA] offset:160 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+2], v[vgprLocalReadAddrA] offset:192 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+3], v[vgprLocalReadAddrA] offset:224 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
-
-/* local read b */
-ds_read_b32 v[vgprValuB_X1_I0+0], v[vgprLocalReadAddrB] offset:128 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+1], v[vgprLocalReadAddrB] offset:160 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+2], v[vgprLocalReadAddrB] offset:192 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+3], v[vgprLocalReadAddrB] offset:224 // L -> Reg lro=32 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
-
-/* local read increment a */
-/* N/A, lro->64 */
-
-/* local read increment b */
-/* N/A, lro->64 */
-s_waitcnt lgkmcnt(8)                               // wait for prior local read old=8 new=8
-MAC_4x4_X0
 
 /* iter 1 */
 
 
 /* local read a */
-ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:256 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:288 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:320 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:352 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuA_X1_I0+0], v[vgprLocalReadAddrA] offset:256 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read b */
-ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:256 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:288 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:320 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:352 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-
-/* local read increment a */
+ds_read_b32 v[vgprValuB_X1_I0+0], v[vgprLocalReadAddrB] offset:256 // L -> Reg lro=64 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
 /* N/A, lro->96 */
 
 /* local read increment b */
 /* N/A, lro->96 */
-s_waitcnt lgkmcnt(8)                               // wait for prior local read old=8 new=8
-MAC_4x4_X1
-
-/* iter 2 */
-
-
-/* local read a */
-ds_read_b32 v[vgprValuA_X1_I0+0], v[vgprLocalReadAddrA] offset:384 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+1], v[vgprLocalReadAddrA] offset:416 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+2], v[vgprLocalReadAddrA] offset:448 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+3], v[vgprLocalReadAddrA] offset:480 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
-
-/* local read b */
-ds_read_b32 v[vgprValuB_X1_I0+0], v[vgprLocalReadAddrB] offset:384 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+1], v[vgprLocalReadAddrB] offset:416 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+2], v[vgprLocalReadAddrB] offset:448 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+3], v[vgprLocalReadAddrB] offset:480 // L -> Reg lro=96 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
-
-/* local read increment a */
-/* N/A, lro->128 */
-
-/* local read increment b */
-/* N/A, lro->128 */
-s_waitcnt lgkmcnt(8)                               // wait for prior local read old=8 new=8
-MAC_4x4_X0
+s_waitcnt lgkmcnt(2)                               // wait for prior local read old=8 new=8
+v_mfma_f32_32x32x2f32 a[0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[0:15]
 
 /* iter 3 */
 
 
 /* local read a */
 ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:512 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:544 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:576 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:608 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read b */
 ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:512 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:544 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:576 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:608 // L -> Reg lro=128 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read increment a */
 /* N/A, lro->160 */
 
 /* local read increment b */
 /* N/A, lro->160 */
-s_waitcnt lgkmcnt(8)                               // wait for prior local read old=8 new=8
-MAC_4x4_X1
-
-/* iter 4 */
-
-
-/* local read a */
-ds_read_b32 v[vgprValuA_X1_I0+0], v[vgprLocalReadAddrA] offset:640 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+1], v[vgprLocalReadAddrA] offset:672 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+2], v[vgprLocalReadAddrA] offset:704 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+3], v[vgprLocalReadAddrA] offset:736 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
-
-/* local read b */
-ds_read_b32 v[vgprValuB_X1_I0+0], v[vgprLocalReadAddrB] offset:640 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+1], v[vgprLocalReadAddrB] offset:672 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+2], v[vgprLocalReadAddrB] offset:704 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+3], v[vgprLocalReadAddrB] offset:736 // L -> Reg lro=160 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
-
-/* local read increment a */
-/* N/A, lro->192 */
-
-/* local read increment b */
-/* N/A, lro->192 */
-s_waitcnt lgkmcnt(8)                               // wait for prior local read old=8 new=8
-MAC_4x4_X0
+s_waitcnt lgkmcnt(2)                               // wait for prior local read old=8 new=8
+v_mfma_f32_32x32x2f32 a[0:15], v[vgprValuA_X1_I0+0], v[vgprValuB_X1_I0+0], a[0:15]
 
 /* iter 5 */
 
 
 /* local read a */
-ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:768 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:800 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:832 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:864 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuA_X1_I0+0], v[vgprLocalReadAddrA] offset:768 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read b */
-ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:768 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:800 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:832 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:864 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuB_X1_I0+0], v[vgprLocalReadAddrB] offset:768 // L -> Reg lro=192 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read increment a */
 /* N/A, lro->224 */
 
 /* local read increment b */
 /* N/A, lro->224 */
-s_waitcnt lgkmcnt(8)                               // wait for prior local read old=8 new=8
-MAC_4x4_X1
-
-/* iter 6 (localWrite + swap local pointers iteration) */
-
-
-/* local read a */
-ds_read_b32 v[vgprValuA_X1_I0+0], v[vgprLocalReadAddrA] offset:896 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+1], v[vgprLocalReadAddrA] offset:928 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+2], v[vgprLocalReadAddrA] offset:960 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuA_X1_I0+3], v[vgprLocalReadAddrA] offset:992 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
-
-/* local read b */
-ds_read_b32 v[vgprValuB_X1_I0+0], v[vgprLocalReadAddrB] offset:896 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+1], v[vgprLocalReadAddrB] offset:928 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+2], v[vgprLocalReadAddrB] offset:960 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=1 iui=0
-ds_read_b32 v[vgprValuB_X1_I0+3], v[vgprLocalReadAddrB] offset:992 // L -> Reg lro=224 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=1 iui=0
+s_waitcnt lgkmcnt(2)                               // wait for prior local read old=8 new=8
+v_mfma_f32_32x32x2f32 a[0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[0:15]
 
 /* local read init pointers a */
 
@@ -1053,15 +949,11 @@ ds_read_b32 v[vgprValuB_X1_I0+3], v[vgprLocalReadAddrB] offset:992 // L -> Reg l
 /* local read init pointers b */
 
 /* localReadInitPointers */
-s_waitcnt lgkmcnt(8)                               // wait for prior local read old=8 new=8
-MAC_4x4_X0
-
-
 
 /* iter 7 (last) */
 
 s_waitcnt lgkmcnt(0)                               // 2wait for local read old=0 new=0
-MAC_4x4_X1
+v_mfma_f32_32x32x2f32 a[0:15], v[vgprValuA_X1_I0+0], v[vgprValuB_X1_I0+0], a[0:15]
 
 /******************************************/
 /* Unrolled Loop - End                    */
@@ -1165,49 +1057,98 @@ s_waitcnt lgkmcnt(0)                               // 5wait for local write
 s_cmp_le_u32 s[sgprLoopCounters+0], 0x0            // LoopCounterL < EndCounter
 s_cbranch_scc1 label_0006                          // don't enter LoopL
 s_mov_b32 s[sgprOrigLoopCounter], 0                // repurpose to count each localRead increment
-label_0005:
 
+label_0005:
+s_cmp_le_i32 s[sgprLoopCounters+0], 0x1            // LoopCounterL < EndCounter
+s_cbranch_scc1 label_00055
 
 /* local read a */
 
 ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:32 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:96 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
 
 
 /* local read b */
 
 ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:32 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:96 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
 
 
 /* local read inc a */
 
-s_mov_b32 s77, 0x80                                // inc
+s_mov_b32 s77, 0x100                               // inc
 _v_add_co_u32 v[vgprLocalReadAddrA], vcc, s77, v[vgprLocalReadAddrA] // lrA += 128 (LSU*(MT+PAD)*bpe)
 
 
 /* local read inc b */
 
-s_mov_b32 s77, 0x80                                // inc
+s_mov_b32 s77, 0x100                               // inc
 _v_add_co_u32 v[vgprLocalReadAddrB], vcc, s77, v[vgprLocalReadAddrB] // lrB += 128 (LSU*(MT+PAD)*bpe)
 
 s_waitcnt lgkmcnt(0)                               // 4wait for local read
 
-MAC_4x4_X0
+v_mfma_f32_32x32x2f32 a[0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[0:15]
 
 /* closeLoop loopL finalLoop=1 tailLoop=1 */
+s_sub_u32 s[sgprLoopCounters+0], s[sgprLoopCounters+0], 0x2 // dec counterL (toilLoop)
+s_add_u32 s[sgprOrigLoopCounter], s[sgprOrigLoopCounter], 0x2 // inc counterL
+s_cmp_lt_i32 s[sgprLoopCounters+0], 0x2            // counterL<MFMA_K
+s_cbranch_scc0 label_0005                          // restart LoopL
+
+
+/* second taile for MFMA */
+label_00055:
+
+s_cmp_le_i32 s[sgprLoopCounters+0], 0x0            // LoopCounterL < EndCounter
+s_cbranch_scc1 label_0006
+
+/* local read a */
+
+ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
+
+
+/* local read b */
+
+ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
+
+s_waitcnt lgkmcnt(0)                               // 4wait for local read
+
+v_and_b32 v31, 63, v[vgprSerial]                   // vectorStaticDiv: v2 = v[vgprSerial] % 64
+
+v_cmp_lt_u32 s[56:57], v31, 0x20
+
+v_cndmask_b32 v[vgprValuA_X0_I0+0], 0, v[vgprValuA_X0_I0+0], s[56:57]
+
+v_cndmask_b32 v[vgprValuB_X0_I0+0], 0, v[vgprValuB_X0_I0+0], s[56:57]
+
+v_mfma_f32_32x32x2f32 a[0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[0:15]
+
 s_sub_u32 s[sgprLoopCounters+0], s[sgprLoopCounters+0], 0x1 // dec counterL (toilLoop)
 s_add_u32 s[sgprOrigLoopCounter], s[sgprOrigLoopCounter], 0x1 // inc counterL
 s_cmp_eq_i32 s[sgprLoopCounters+0], 0x0            // counterL==0
-s_cbranch_scc0 label_0005                          // restart LoopL
+s_cbranch_scc0 label_00055                         // restart LoopL
+
 label_0006:
 
 Summation_End_11:
 /* endSummation: add vgpr 16...36 to pool */
+
+/* read c value from accumualted register bank */
+v_accvgpr_read_b32 v[vgprValuC+ 0], a0
+v_accvgpr_read_b32 v[vgprValuC+ 1], a1
+v_accvgpr_read_b32 v[vgprValuC+ 2], a2
+v_accvgpr_read_b32 v[vgprValuC+ 3], a3
+v_accvgpr_read_b32 v[vgprValuC+ 4], a4
+v_accvgpr_read_b32 v[vgprValuC+ 5], a5
+v_accvgpr_read_b32 v[vgprValuC+ 6], a6
+v_accvgpr_read_b32 v[vgprValuC+ 7], a7
+v_accvgpr_read_b32 v[vgprValuC+ 8], a8
+v_accvgpr_read_b32 v[vgprValuC+ 9], a9
+v_accvgpr_read_b32 v[vgprValuC+10], a10
+v_accvgpr_read_b32 v[vgprValuC+11], a11
+v_accvgpr_read_b32 v[vgprValuC+12], a12
+v_accvgpr_read_b32 v[vgprValuC+13], a13
+v_accvgpr_read_b32 v[vgprValuC+14], a14
+v_accvgpr_read_b32 v[vgprValuC+15], a15
+
 
 s_mov_b32 s[sgprSrdD+0], s[sgprAddressD+0]         // init SRD base address (lower)
 s_mov_b32 s[sgprSrdD+1], s[sgprAddressD+1]         // init SRD base address (upper) + other fields
@@ -1243,10 +1184,16 @@ s_addc_u32 s[sgprSrdD+1], s[sgprSrdD+1], s57       // add hi to SRD
 /* not-LocalSplitU: global write indices */
 
 /* computeStoreVgprs */
-v_lshrrev_b32 v17, 3, v[vgprSerial]                // vectorStaticDiv: v17 = v[vgprSerial] / 8
-v_and_b32 v16, 7, v[vgprSerial]                    // vectorStaticDiv: v16 = v[vgprSerial] % 8
+// v17: ldx1
+// v16: ldx0
+// v18: ldx1 * stirde_C
+v_lshrrev_b32 v16, 5, v[vgprSerial]                // vectorStaticDiv: v17 = v[vgprSerial] / 32
+v_mul_lo_u32 v16, v16, 4
+v_and_b32 v17, 31, v[vgprSerial]                   // vectorStaticDiv: v16 = v[vgprSerial] % 32
 v_mul_lo_u32 v18, v17, s[sgprStridesC+0]           // rowStart vgpr
 
+// v16: wg0*MT0 + ldx0
+// v17: wg1*MT1 + ldx1
 s_mul_i32 s56, 0x20, s[sgprWorkGroup0]             // s56 = wg0*MT0
 _v_add_co_u32 v16, vcc, s56, v16                   // coord0 = tid0*VW + wg0*MT0
 s_mul_i32 s58, 0x20, s[sgprWorkGroup1]             // <- wg1*MT1
@@ -1320,31 +1267,29 @@ v_mul_f32 v[vgprValuC+15], s[sgprAlpha], v[vgprValuC+15] // *= alpha
 
 /* apply mask, calc new C and issue write */
 buffer_store_dword v0, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v1, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
-buffer_store_dword v2, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v3, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 32               // scale StrideD *= 8 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
+buffer_store_dword v1, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
+buffer_store_dword v2, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
+buffer_store_dword v3, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
+s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
 buffer_store_dword v4, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v5, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
-buffer_store_dword v6, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v7, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 32               // scale StrideD *= 8 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
+buffer_store_dword v5, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
+buffer_store_dword v6, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
+buffer_store_dword v7, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
+s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
 buffer_store_dword v8, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v9, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
-buffer_store_dword v10, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v11, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 32               // scale StrideD *= 8 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
+buffer_store_dword v9, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
+buffer_store_dword v10, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
+buffer_store_dword v11, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
+s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
 buffer_store_dword v12, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v13, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
-buffer_store_dword v14, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v15, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
+buffer_store_dword v13, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
+buffer_store_dword v14, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
+buffer_store_dword v15, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
 s_branch label_0025                                // jump to end
+
 GW_B0_E1_17:
 
 /* allocate 36 sgpr. perBatch=6 perElement=2 elements=15 */
@@ -1362,105 +1307,113 @@ v_cmp_lt_u32 s[62:63], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v21, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v21, -1, v21, s[62:63]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(0,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
 _v_add_lshl_u32 v22, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v22, -1, v22, s[64:65]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(0,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v23, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v23, -1, v23, s[66:67]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(0,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
 _v_add_lshl_u32 v24, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v24, -1, v24, s[68:69]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(1,0,0,0) */
-_v_add_co_u32 v17, vcc, v17, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 8                // scale stride
-_v_add_u32 v18, v18, s56                           // ROWINC- Move cinRowPtr to next row
+_v_add_co_u32 v16, vcc, v16, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
 v_cmp_lt_u32 s[56:57], v16, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
 _v_add_lshl_u32 v25, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v25, -1, v25, s[70:71]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(1,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
 _v_add_lshl_u32 v26, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v26, -1, v26, s[72:73]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(1,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
 _v_add_lshl_u32 v27, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v27, -1, v27, s[74:75]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(1,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[76:77], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[76:77], s[56:57], s[76:77]             // in0 && in1
 _v_add_lshl_u32 v28, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v28, -1, v28, s[76:77]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(2,0,0,0) */
-_v_add_co_u32 v17, vcc, v17, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 8                // scale stride
-_v_add_u32 v18, v18, s56                           // ROWINC- Move cinRowPtr to next row
+_v_add_co_u32 v16, vcc, v16, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
 v_cmp_lt_u32 s[56:57], v16, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[78:79], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[78:79], s[56:57], s[78:79]             // in0 && in1
 _v_add_lshl_u32 v29, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v29, -1, v29, s[78:79]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(2,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[80:81], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[80:81], s[56:57], s[80:81]             // in0 && in1
 _v_add_lshl_u32 v30, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v30, -1, v30, s[80:81]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(2,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[82:83], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[82:83], s[56:57], s[82:83]             // in0 && in1
 _v_add_lshl_u32 v31, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v31, -1, v31, s[82:83]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(2,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[84:85], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[84:85], s[56:57], s[84:85]             // in0 && in1
 _v_add_lshl_u32 v32, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v32, -1, v32, s[84:85]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(3,0,0,0) */
-_v_add_co_u32 v17, vcc, v17, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 8                // scale stride
-_v_add_u32 v18, v18, s56                           // ROWINC- Move cinRowPtr to next row
+_v_add_co_u32 v16, vcc, v16, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
 v_cmp_lt_u32 s[56:57], v16, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[86:87], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[86:87], s[56:57], s[86:87]             // in0 && in1
 _v_add_lshl_u32 v33, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v33, -1, v33, s[86:87]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(3,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[88:89], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[88:89], s[56:57], s[88:89]             // in0 && in1
 _v_add_lshl_u32 v34, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v34, -1, v34, s[88:89]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(3,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[90:91], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[90:91], s[56:57], s[90:91]             // in0 && in1
@@ -1509,7 +1462,7 @@ buffer_store_dword v14, v35, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(3,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
@@ -1522,6 +1475,7 @@ v_mul_f32 v[vgprValuC+15], s[sgprAlpha], v[vgprValuC+15] // *= alpha
 /* apply mask, calc new C and issue write */
 buffer_store_dword v15, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
 s_branch label_0025                                // jump to end
+
 GW_Beta_18:
 /* TODO-packed- compare against product of all packed C0 sizes not just SizesFree+0 */
 s_and_b32 s56, 31, s[sgprSizeC0I]                  // s56 = s[sgprSizeC0I] % 32
@@ -1549,42 +1503,39 @@ GW_B1_E0_21:
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(0,0,0,0) */
 _v_add_lshl_u32 v21, v18, v16, 0x2                 // optSingleColVgpr scaleToBpe: sharedAddrVgpr <- cinRowPtr + coord0, scaled by BPE
-buffer_load_dword v22, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v22, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,1,0) */
-buffer_load_dword v23, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:32 // load C for beta calc
+buffer_load_dword v23, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:4  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,2,0) */
-buffer_load_dword v24, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v24, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:8  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,3,0) */
-buffer_load_dword v25, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:96 // load C for beta calc
+buffer_load_dword v25, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:12 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 32               // scale StrideC *= 8 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
+s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v26, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v26, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,1,0) */
-buffer_load_dword v27, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:32 // load C for beta calc
+buffer_load_dword v27, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:4  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,2,0) */
-buffer_load_dword v28, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v28, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:8  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,3,0) */
-buffer_load_dword v29, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:96 // load C for beta calc
+buffer_load_dword v29, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:12 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 32               // scale StrideC *= 8 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
+s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v30, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v30, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,1,0) */
-buffer_load_dword v31, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:32 // load C for beta calc
+buffer_load_dword v31, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:4  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,2,0) */
-buffer_load_dword v32, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v32, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:8  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,3,0) */
-buffer_load_dword v33, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:96 // load C for beta calc
+buffer_load_dword v33, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:12 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 32               // scale StrideC *= 8 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
+s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v34, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v34, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0  // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,1,0) */
-buffer_load_dword v35, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:32 // load C for beta calc
+buffer_load_dword v35, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:4  // load C for beta calc
 
 /* rC *= alpha batchEements=[(0, 0, 0, 0), (0, 1, 0, 0), (0, 2, 0, 0), (0, 3, 0, 0), (1, 0, 0, 0), (1, 1, 0, 0), (1, 2, 0, 0), (1, 3, 0, 0), (2, 0, 0, 0), (2, 1, 0, 0), (2, 2, 0, 0), (2, 3, 0, 0), (3, 0, 0, 0), (3, 1, 0, 0)] */
 v_mul_f32 v[vgprValuC+0], s[sgprAlpha], v[vgprValuC+0] // *= alpha
@@ -1606,68 +1557,65 @@ v_mul_f32 v[vgprValuC+13], s[sgprAlpha], v[vgprValuC+13] // *= alpha
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+0], v22, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v0, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v0, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,   // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+1], v23, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v1, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
+buffer_store_dword v1, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,   // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+2], v24, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v2, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v2, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,   // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+3], v25, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v3, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
+buffer_store_dword v3, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+4], v26, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 32               // scale StrideD *= 8 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
+s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
 buffer_store_dword v4, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+5], v27, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v5, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
+buffer_store_dword v5, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+6], v28, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v6, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v6, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+7], v29, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v7, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
+buffer_store_dword v7, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+8], v30, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 32               // scale StrideD *= 8 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
+s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v8, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v8, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,    // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+9], v31, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v9, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
+buffer_store_dword v9, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,    // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+10], v32, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v10, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v10, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,   // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+11], v33, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v11, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
+buffer_store_dword v11, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+12], v34, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 32               // scale StrideD *= 8 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
+s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], 32        // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
 buffer_store_dword v12, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+13], v35, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v13, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
+buffer_store_dword v13, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
 /* optSingleColVgpr=1 optSharedColVgpr=0 optSharedMask=1 optSrdIncForRow=1 */
 
 /******************************************/
@@ -1677,9 +1625,9 @@ buffer_store_dword v13, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // st
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(3,0,2,0) */
-buffer_load_dword v22, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v22, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:8 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,3,0) */
-buffer_load_dword v23, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:96 // load C for beta calc
+buffer_load_dword v23, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:12 // load C for beta calc
 
 /* rC *= alpha batchEements=[(3, 2, 0, 0), (3, 3, 0, 0)] */
 v_mul_f32 v[vgprValuC+14], s[sgprAlpha], v[vgprValuC+14] // *= alpha
@@ -1689,11 +1637,11 @@ v_mul_f32 v[vgprValuC+15], s[sgprAlpha], v[vgprValuC+15] // *= alpha
 
 s_waitcnt vmcnt(1)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+14], v22, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v14, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v14, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
 
 s_waitcnt vmcnt(1)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+15], v23, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v15, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
+buffer_store_dword v15, v21, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
 s_branch label_0025                                // jump to end
 GW_B1_E1_24:
 
@@ -1713,50 +1661,54 @@ s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v21, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v21, -1, v21, s[62:63]               // clip if OOB. offset
 buffer_load_dword v22, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(0,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
 _v_add_lshl_u32 v23, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v23, -1, v23, s[64:65]               // clip if OOB. offset
 buffer_load_dword v24, v23, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(0,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v25, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v25, -1, v25, s[66:67]               // clip if OOB. offset
 buffer_load_dword v26, v25, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(0,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
 _v_add_lshl_u32 v27, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v27, -1, v27, s[68:69]               // clip if OOB. offset
 buffer_load_dword v28, v27, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(1,0,0,0) */
-_v_add_co_u32 v17, vcc, v17, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 8                // scale stride
-_v_add_u32 v18, v18, s56                           // ROWINC- Move cinRowPtr to next row
+_v_add_co_u32 v16, vcc, v16, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
 v_cmp_lt_u32 s[56:57], v16, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
 _v_add_lshl_u32 v29, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v29, -1, v29, s[70:71]               // clip if OOB. offset
 buffer_load_dword v30, v29, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(1,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
 _v_add_lshl_u32 v31, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v31, -1, v31, s[72:73]               // clip if OOB. offset
 buffer_load_dword v32, v31, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(1,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -1798,59 +1750,61 @@ buffer_store_dword v6, v33, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // stor
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(1,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v21, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v21, -1, v21, s[62:63]               // clip if OOB. offset
 buffer_load_dword v22, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(2,0,0,0) */
-_v_add_co_u32 v17, vcc, v17, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 8                // scale stride
-_v_add_u32 v18, v18, s56                           // ROWINC- Move cinRowPtr to next row
+_v_add_co_u32 v16, vcc, v16, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
 v_cmp_lt_u32 s[56:57], v16, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
 _v_add_lshl_u32 v23, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v23, -1, v23, s[64:65]               // clip if OOB. offset
 buffer_load_dword v24, v23, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(2,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v25, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v25, -1, v25, s[66:67]               // clip if OOB. offset
 buffer_load_dword v26, v25, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(2,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
 _v_add_lshl_u32 v27, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v27, -1, v27, s[68:69]               // clip if OOB. offset
 buffer_load_dword v28, v27, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(2,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
 _v_add_lshl_u32 v29, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v29, -1, v29, s[70:71]               // clip if OOB. offset
 buffer_load_dword v30, v29, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(3,0,0,0) */
-_v_add_co_u32 v17, vcc, v17, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 8                // scale stride
-_v_add_u32 v18, v18, s56                           // ROWINC- Move cinRowPtr to next row
+_v_add_co_u32 v16, vcc, v16, 8                     // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
 v_cmp_lt_u32 s[56:57], v16, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
 _v_add_lshl_u32 v31, v18, v16, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v31, -1, v31, s[72:73]               // clip if OOB. offset
 buffer_load_dword v32, v31, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(3,0,1,0) */
-_v_add_co_u32 v19, vcc, v16, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -1892,15 +1846,16 @@ buffer_store_dword v13, v33, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(3,0,2,0) */
-_v_add_co_u32 v19, vcc, v16, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v21, v18, v19, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v21, -1, v21, s[62:63]               // clip if OOB. offset
 buffer_load_dword v22, v21, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+
 /* (d1,vc1,d0,vc0)=(3,0,3,0) */
-_v_add_co_u32 v19, vcc, v16, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v19, vcc, v16, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v19, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v17, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
