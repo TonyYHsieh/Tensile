@@ -1,0 +1,2 @@
+/usr/bin/ar qc libTensile.a  CMakeFiles/Tensile.dir/Tensile/Tensile.cpp.o CMakeFiles/Tensile.dir/Tensile/Kernels.cpp.o CMakeFiles/Tensile.dir/Tensile/Solutions.cpp.o CMakeFiles/Tensile.dir/Tensile/Tools.cpp.o CMakeFiles/Tensile.dir/Tensile/SolutionHelper.cpp.o
+/usr/bin/ranlib libTensile.a
