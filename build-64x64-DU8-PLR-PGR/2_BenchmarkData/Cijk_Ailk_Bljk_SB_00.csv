@@ -1,0 +1,2 @@
+GFlops, SizeI, SizeJ, SizeK, SizeL, LDD, LDC, LDA, LDB, TotalFlops, Cijk_Ailk_Bljk_SB_MT64x64x8_SE_
+0, 64, 64, 1, 8, 64, 64, 64, 8, 65536, 1.83682
