@@ -1,0 +1,82 @@
+---
+library:
+  rows:
+  - library: {index: 0, type: Single}
+    predicate:
+      type: And
+      value:
+      - {index: 0, type: BoundSizeMultiple, value: 2}
+      - {type: LeadingFreeSizesGreaterOrEqual, value: 2}
+      - {type: MaxProblemSizeGreaterThan, value: 32}
+      - {index: 0, type: FreeSizeAMultiple, value: 2}
+      - {type: OperationIdentifierEqual, value: Contraction_l_Ailk_Bljk_Cijk_Dijk}
+      - type: TypesEqual
+        value: [Half, Half, Half, Half]
+      - {type: HighPrecisionAccumulate, value: false}
+  type: Problem
+solutions:
+- debugKernel: false
+  hardwarePredicate:
+    type: AMDGPU
+    value: {type: Processor, value: gfx908}
+  ideals: {}
+  index: 0
+  info: {AggressivePerfMode: '1', AssertFree0ElementMultiple: '2', AssertFree1ElementMultiple: '1',
+    AssertMinApproxSize: '3', AssertSummationElementMultiple: '2', AssignedDerivedParameters: 'False',
+    AssignedProblemIndependentDerivedParameters: 'True', BufferLoad: 'True', BufferStore: 'True',
+    CheckDimOverflow: '0', CheckTensorDimAsserts: 'False', DepthU: '32', DirectToLds: 'False',
+    DirectToLdsA: 'False', DirectToLdsB: 'False', DisableAtomicFail: '0', DisableKernelPieces: '0',
+    EdgeType: ShiftPtr, ExpandPointerSwap: 'False', FractionalLoad: '0', GlobalLoadVectorWidthA: '2',
+    GlobalLoadVectorWidthB: '2', GlobalRead2A: 'True', GlobalRead2B: 'True', GlobalReadCoalesceGroupA: 'True',
+    GlobalReadCoalesceGroupB: 'True', GlobalReadCoalesceVectorA: 'True', GlobalReadCoalesceVectorB: 'True',
+    GlobalReadVectorWidth: '2', GlobalSplitU: '1', GlobalSplitUSummationAssignmentRoundRobin: 'True',
+    GlobalSplitUWorkGroupMappingRoundRobin: 'False', GlobalWriteVectorWidth: '2',
+    GuaranteeNoPartialA: 'True', GuaranteeNoPartialB: 'True', ISA: '[9, 0, 8]', InnerUnroll: '1',
+    InterleaveAlpha: '0', KernelLanguage: Assembly, LSCA: '32', LSCB: '32', LSPA: '4',
+    LSPB: '4', LVCA: '16', LVCB: '16', LVPA: '2', LVPB: '2', LdcEqualsLdd: 'True',
+    LdsNumElements: '2048', LdsOffsetA: '0', LdsOffsetB: '1024', LdsPadA: '0', LdsPadB: '0',
+    LocalDotLayout: '1', LocalRead2A: 'True', LocalRead2B: 'True', LocalSplitU: '1',
+    LocalWrite2A: 'True', LocalWrite2B: 'True', LocalWriteUseSgprA: 'False', LocalWriteUseSgprB: 'False',
+    LoopDoWhile: 'False', LoopTail: 'True', LoopUnroll: '32', MacroTile0: '32', MacroTile1: '32',
+    MacroTileA: '32', MacroTileB: '32', MacroTileShapeMax: '64', MacroTileShapeMin: '1',
+    MaxOccupancy: '40', MaxVgprNumber: '256', MinVgprNumber: '0', NonTemporalA: '0',
+    NonTemporalB: '0', NonTemporalC: '0', NumElementsPerThread: '16', NumGlobalWriteVectorsPerThread: '8',
+    NumLoadsA: '8', NumLoadsB: '8', NumLoadsCoalescedA: '1', NumLoadsCoalescedB: '1',
+    NumLoadsPerpendicularA: '8', NumLoadsPerpendicularB: '8', NumThreads: '64', OptNoLoadLoop: '1',
+    PackBatchDims: '0', PackFreeDims: '1', PackGranularity: '2', PackedC0IdxChars: '[''I'']',
+    PackedC0IndicesX: '[0]', PackedC1IdxChars: '[''J'']', PackedC1IndicesX: '[1]',
+    PerformanceSyncLocation: '-1', PerformanceWaitCount: '-1', PerformanceWaitLocation: '-1',
+    PersistentKernel: '0', PrefetchAcrossPersistent: '0', PrefetchGlobalRead: 'False',
+    PrefetchLocalRead: 'False', ReplacementKernel: 'False', ScheduleGlobalRead: '1',
+    ScheduleIterAlg: '1', ScheduleLocalWrite: '1', StaggerU: '32', StaggerUMapping: '0',
+    StaggerUStride: '256', SubGroup0: '8', SubGroup1: '8', SubGroupA: '8', SubGroupB: '8',
+    SuppressNoLoadLoop: 'False', ThreadTile: '[4, 4]', ThreadTile0: '4', ThreadTile1: '4',
+    ThreadTileA: '4', ThreadTileB: '4', UnrollMemFence: 'False', UseSgprForGRO: '1',
+    Valid: 'True', VectorAtomicWidth: '2', VectorStore: 'True', VectorWidth: '2',
+    WorkGroup: '[8, 8, 1]', WorkGroupMapping: '1', WorkGroupMappingType: B, _staggerStrideShift: '2'}
+  name: Cijk_Ailk_Bljk_HB_MT32x32x32_SE_K1
+  problemPredicate:
+    type: And
+    value:
+    - {index: 0, type: BoundSizeMultiple, value: 2}
+    - {type: LeadingFreeSizesGreaterOrEqual, value: 2}
+    - {type: MaxProblemSizeGreaterThan, value: 32}
+    - {index: 0, type: FreeSizeAMultiple, value: 2}
+    - {type: OperationIdentifierEqual, value: Contraction_l_Ailk_Bljk_Cijk_Dijk}
+    - type: TypesEqual
+      value: [Half, Half, Half, Half]
+    - {type: HighPrecisionAccumulate, value: false}
+  problemType: {aType: Half, bType: Half, cType: Half, dType: Half, highPrecisionAccumulate: false,
+    operationIdentifier: Contraction_l_Ailk_Bljk_Cijk_Dijk, useBeta: true}
+  sizeMapping:
+    depthU: 32
+    globalSplitU: 1
+    macroTile: [32, 32, 1]
+    persistentKernel: 0
+    sourceKernel: false
+    staggerStrideShift: 2
+    staggerU: 32
+    threadTile: [4, 4]
+    workGroup: [8, 8, 1]
+    workGroupMapping: 1
+...
