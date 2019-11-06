@@ -924,18 +924,18 @@ s_barrier //
 
 /* local read prefetch a */
 
-ds_read_b32 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:0   // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:128 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:256 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:384 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:0   // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:128 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:256 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:384 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 
 /* local read prefetch b */
 
-ds_read_b32 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:0   // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:128 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:256 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:384 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:0   // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:128 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:256 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:384 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read inc a */
@@ -974,20 +974,20 @@ label_0010: // LoopCopy1
 
 /* local read a */
 
-ds_read_b32 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:1024 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:1152 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:1280 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:1408 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:1024 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:1152 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:1280 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:1408 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 
 buffer_load_dword v[vgprG2LA+0], v[vgprGlobalReadOffsetA+0], s[sgprSrdA:sgprSrdA+3], 0, offen offset:0 // G -> Reg 0_0_0_0
 
 /* local read b */
 
-ds_read_b32 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:1024 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:1152 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:1280 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:1408 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:1024 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:1152 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:1280 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:1408 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read increment a */
@@ -999,21 +999,11 @@ s_waitcnt lgkmcnt(8)                               // wait for prior local read 
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp0+0], 0x0000ffff, v[vgprValueATmp0+0]
-v_and_b32 v[vgprValueATmp0+1], 0x0000ffff, v[vgprValueATmp0+1]
 v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValueATmp0+1], 16, v[vgprValueATmp0+0]
-
-v_and_b32 v[vgprValueATmp0+2], 0x0000ffff, v[vgprValueATmp0+2]
-v_and_b32 v[vgprValueATmp0+3], 0x0000ffff, v[vgprValueATmp0+3]
 v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValueATmp0+3], 16, v[vgprValueATmp0+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp0+0], 0x0000ffff, v[vgprValueBTmp0+0]
-v_and_b32 v[vgprValueBTmp0+1], 0x0000ffff, v[vgprValueBTmp0+1]
 v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValueBTmp0+1], 16, v[vgprValueBTmp0+0]
-
-v_and_b32 v[vgprValueBTmp0+2], 0x0000ffff, v[vgprValueBTmp0+2]
-v_and_b32 v[vgprValueBTmp0+3], 0x0000ffff, v[vgprValueBTmp0+3]
 v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValueBTmp0+3], 16, v[vgprValueBTmp0+2]
 
 s_nop 1
@@ -1095,18 +1085,18 @@ s_barrier //
 
 /* local read prefetch a */
 
-ds_read_b32 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:4096 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:4224 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:4352 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:4480 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:4096 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:4224 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:4352 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:4480 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 
 /* local read prefetch b */
 
-ds_read_b32 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:4096// offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:4224// offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:4352// offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:4480// offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:4096// offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:4224// offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:4352// offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:4480// offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read inc a */
@@ -1117,21 +1107,11 @@ ds_read_b32 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:4480// offset : (i
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp1+0], 0x0000ffff, v[vgprValueATmp1+0]
-v_and_b32 v[vgprValueATmp1+1], 0x0000ffff, v[vgprValueATmp1+1]
 v_lshl_or_b32 v[vgprValuA_X1_I0+0], v[vgprValueATmp1+1], 16, v[vgprValueATmp1+0]
-
-v_and_b32 v[vgprValueATmp1+2], 0x0000ffff, v[vgprValueATmp1+2]
-v_and_b32 v[vgprValueATmp1+3], 0x0000ffff, v[vgprValueATmp1+3]
 v_lshl_or_b32 v[vgprValuA_X1_I0+1], v[vgprValueATmp1+3], 16, v[vgprValueATmp1+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp1+0], 0x0000ffff, v[vgprValueBTmp1+0]
-v_and_b32 v[vgprValueBTmp1+1], 0x0000ffff, v[vgprValueBTmp1+1]
 v_lshl_or_b32 v[vgprValuB_X1_I0+0], v[vgprValueBTmp1+1], 16, v[vgprValueBTmp1+0]
-
-v_and_b32 v[vgprValueBTmp1+2], 0x0000ffff, v[vgprValueBTmp1+2]
-v_and_b32 v[vgprValueBTmp1+3], 0x0000ffff, v[vgprValueBTmp1+3]
 v_lshl_or_b32 v[vgprValuB_X1_I0+1], v[vgprValueBTmp1+3], 16, v[vgprValueBTmp1+2]
 
 s_nop 1
@@ -1161,20 +1141,20 @@ label_0011: // LoopCopy2
 
 /* local read a */
 
-ds_read_b32 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:5120 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:5248 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:5376 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:5504 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:5120 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:5248 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:5376 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:5504 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 buffer_load_dword v[vgprG2LA+0], v[vgprGlobalReadOffsetA+0], s[sgprSrdA:sgprSrdA+3], 0, offen offset:0 // G -> Reg 0_0_0_0
 
 
 /* local read b */
 
-ds_read_b32 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:5120 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:5248 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:5376 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:5504 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:5120 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:5248 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:5376 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:5504 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read increment a */
@@ -1186,21 +1166,11 @@ s_waitcnt lgkmcnt(8)                               // wait for prior local read 
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp0+0], 0x0000ffff, v[vgprValueATmp0+0]
-v_and_b32 v[vgprValueATmp0+1], 0x0000ffff, v[vgprValueATmp0+1]
 v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValueATmp0+1], 16, v[vgprValueATmp0+0]
-
-v_and_b32 v[vgprValueATmp0+2], 0x0000ffff, v[vgprValueATmp0+2]
-v_and_b32 v[vgprValueATmp0+3], 0x0000ffff, v[vgprValueATmp0+3]
 v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValueATmp0+3], 16, v[vgprValueATmp0+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp0+0], 0x0000ffff, v[vgprValueBTmp0+0]
-v_and_b32 v[vgprValueBTmp0+1], 0x0000ffff, v[vgprValueBTmp0+1]
 v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValueBTmp0+1], 16, v[vgprValueBTmp0+0]
-
-v_and_b32 v[vgprValueBTmp0+2], 0x0000ffff, v[vgprValueBTmp0+2]
-v_and_b32 v[vgprValueBTmp0+3], 0x0000ffff, v[vgprValueBTmp0+3]
 v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValueBTmp0+3], 16, v[vgprValueBTmp0+2]
 
 s_nop 1
@@ -1283,18 +1253,18 @@ s_barrier //
 
 /* local read prefetch a */
 
-ds_read_b32 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:0   // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:128 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:256 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:384 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:0   // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:128 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:256 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:384 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 
 /* local read prefetch b */
 
-ds_read_b32 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:0   // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:128 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:256 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:384 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:0   // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:128 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:256 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:384 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read inc a */
@@ -1305,21 +1275,11 @@ ds_read_b32 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:384 // offset : (i
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp1+0], 0x0000ffff, v[vgprValueATmp1+0]
-v_and_b32 v[vgprValueATmp1+1], 0x0000ffff, v[vgprValueATmp1+1]
 v_lshl_or_b32 v[vgprValuA_X1_I0+0], v[vgprValueATmp1+1], 16, v[vgprValueATmp1+0]
-
-v_and_b32 v[vgprValueATmp1+2], 0x0000ffff, v[vgprValueATmp1+2]
-v_and_b32 v[vgprValueATmp1+3], 0x0000ffff, v[vgprValueATmp1+3]
 v_lshl_or_b32 v[vgprValuA_X1_I0+1], v[vgprValueATmp1+3], 16, v[vgprValueATmp1+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp1+0], 0x0000ffff, v[vgprValueBTmp1+0]
-v_and_b32 v[vgprValueBTmp1+1], 0x0000ffff, v[vgprValueBTmp1+1]
 v_lshl_or_b32 v[vgprValuB_X1_I0+0], v[vgprValueBTmp1+1], 16, v[vgprValueBTmp1+0]
-
-v_and_b32 v[vgprValueBTmp1+2], 0x0000ffff, v[vgprValueBTmp1+2]
-v_and_b32 v[vgprValueBTmp1+3], 0x0000ffff, v[vgprValueBTmp1+3]
 v_lshl_or_b32 v[vgprValuB_X1_I0+1], v[vgprValueBTmp1+3], 16, v[vgprValueBTmp1+2]
 
 s_nop 1
@@ -1410,18 +1370,18 @@ _v_add_co_u32 v13, vcc, s76, v13                   // coord1 = tid1*VW + wg1*MT1
 
 /* local read a */
 
-ds_read_b32 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:1024 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:1152 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:1280 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:1408 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:1024 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:1152 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:1280 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:1408 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 
 /* local read b */
 
-ds_read_b32 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:1024 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:1152 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:1280 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:1408 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:1024 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:1152 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:1280 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:1408 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read inc a */
@@ -1438,21 +1398,11 @@ s_waitcnt lgkmcnt(8)                               // 7wait for local read
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp0+0], 0x0000ffff, v[vgprValueATmp0+0]
-v_and_b32 v[vgprValueATmp0+1], 0x0000ffff, v[vgprValueATmp0+1]
 v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValueATmp0+1], 16, v[vgprValueATmp0+0]
-
-v_and_b32 v[vgprValueATmp0+2], 0x0000ffff, v[vgprValueATmp0+2]
-v_and_b32 v[vgprValueATmp0+3], 0x0000ffff, v[vgprValueATmp0+3]
 v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValueATmp0+3], 16, v[vgprValueATmp0+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp0+0], 0x0000ffff, v[vgprValueBTmp0+0]
-v_and_b32 v[vgprValueBTmp0+1], 0x0000ffff, v[vgprValueBTmp0+1]
 v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValueBTmp0+1], 16, v[vgprValueBTmp0+0]
-
-v_and_b32 v[vgprValueBTmp0+2], 0x0000ffff, v[vgprValueBTmp0+2]
-v_and_b32 v[vgprValueBTmp0+3], 0x0000ffff, v[vgprValueBTmp0+3]
 v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValueBTmp0+3], 16, v[vgprValueBTmp0+2]
 
 s_nop 1
@@ -1467,21 +1417,11 @@ s_waitcnt lgkmcnt(0)                               // 7wait for local read
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp1+0], 0x0000ffff, v[vgprValueATmp1+0]
-v_and_b32 v[vgprValueATmp1+1], 0x0000ffff, v[vgprValueATmp1+1]
 v_lshl_or_b32 v[vgprValuA_X1_I0+0], v[vgprValueATmp1+1], 16, v[vgprValueATmp1+0]
-
-v_and_b32 v[vgprValueATmp1+2], 0x0000ffff, v[vgprValueATmp1+2]
-v_and_b32 v[vgprValueATmp1+3], 0x0000ffff, v[vgprValueATmp1+3]
 v_lshl_or_b32 v[vgprValuA_X1_I0+1], v[vgprValueATmp1+3], 16, v[vgprValueATmp1+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp1+0], 0x0000ffff, v[vgprValueBTmp1+0]
-v_and_b32 v[vgprValueBTmp1+1], 0x0000ffff, v[vgprValueBTmp1+1]
 v_lshl_or_b32 v[vgprValuB_X1_I0+0], v[vgprValueBTmp1+1], 16, v[vgprValueBTmp1+0]
-
-v_and_b32 v[vgprValueBTmp1+2], 0x0000ffff, v[vgprValueBTmp1+2]
-v_and_b32 v[vgprValueBTmp1+3], 0x0000ffff, v[vgprValueBTmp1+3]
 v_lshl_or_b32 v[vgprValuB_X1_I0+1], v[vgprValueBTmp1+3], 16, v[vgprValueBTmp1+2]
 
 s_nop 1
@@ -1619,18 +1559,18 @@ OptNLL_End_12:
 
 /* local read a */
 
-ds_read_b32 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:1024 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:1152 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:1280 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:1408 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+0], v[vgprLocalReadAddrA] offset:1024 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+1], v[vgprLocalReadAddrA] offset:1152 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+2], v[vgprLocalReadAddrA] offset:1280 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp1+3], v[vgprLocalReadAddrA] offset:1408 // offset : (iter(1) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 
 /* local read b */
 
-ds_read_b32 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:1024 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:1152 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:1280 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:1408 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+0], v[vgprLocalReadAddrB] offset:1024 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+1], v[vgprLocalReadAddrB] offset:1152 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+2], v[vgprLocalReadAddrB] offset:1280 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp1+3], v[vgprLocalReadAddrB] offset:1408 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read inc a */
@@ -1647,21 +1587,11 @@ s_waitcnt lgkmcnt(8)                               // 7wait for local read
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp0+0], 0x0000ffff, v[vgprValueATmp0+0]
-v_and_b32 v[vgprValueATmp0+1], 0x0000ffff, v[vgprValueATmp0+1]
 v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValueATmp0+1], 16, v[vgprValueATmp0+0]
-
-v_and_b32 v[vgprValueATmp0+2], 0x0000ffff, v[vgprValueATmp0+2]
-v_and_b32 v[vgprValueATmp0+3], 0x0000ffff, v[vgprValueATmp0+3]
 v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValueATmp0+3], 16, v[vgprValueATmp0+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp0+0], 0x0000ffff, v[vgprValueBTmp0+0]
-v_and_b32 v[vgprValueBTmp0+1], 0x0000ffff, v[vgprValueBTmp0+1]
 v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValueBTmp0+1], 16, v[vgprValueBTmp0+0]
-
-v_and_b32 v[vgprValueBTmp0+2], 0x0000ffff, v[vgprValueBTmp0+2]
-v_and_b32 v[vgprValueBTmp0+3], 0x0000ffff, v[vgprValueBTmp0+3]
 v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValueBTmp0+3], 16, v[vgprValueBTmp0+2]
 
 s_nop 1
@@ -1675,21 +1605,11 @@ s_waitcnt lgkmcnt(0)                               // 7wait for local read
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp1+0], 0x0000ffff, v[vgprValueATmp1+0]
-v_and_b32 v[vgprValueATmp1+1], 0x0000ffff, v[vgprValueATmp1+1]
 v_lshl_or_b32 v[vgprValuA_X1_I0+0], v[vgprValueATmp1+1], 16, v[vgprValueATmp1+0]
-
-v_and_b32 v[vgprValueATmp1+2], 0x0000ffff, v[vgprValueATmp1+2]
-v_and_b32 v[vgprValueATmp1+3], 0x0000ffff, v[vgprValueATmp1+3]
 v_lshl_or_b32 v[vgprValuA_X1_I0+1], v[vgprValueATmp1+3], 16, v[vgprValueATmp1+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp1+0], 0x0000ffff, v[vgprValueBTmp1+0]
-v_and_b32 v[vgprValueBTmp1+1], 0x0000ffff, v[vgprValueBTmp1+1]
 v_lshl_or_b32 v[vgprValuB_X1_I0+0], v[vgprValueBTmp1+1], 16, v[vgprValueBTmp1+0]
-
-v_and_b32 v[vgprValueBTmp1+2], 0x0000ffff, v[vgprValueBTmp1+2]
-v_and_b32 v[vgprValueBTmp1+3], 0x0000ffff, v[vgprValueBTmp1+3]
 v_lshl_or_b32 v[vgprValuB_X1_I0+1], v[vgprValueBTmp1+3], 16, v[vgprValueBTmp1+2]
 
 s_nop 1
@@ -1825,18 +1745,18 @@ s_cbranch_scc1 label_00055
 
 /* local read prefetch a */
 
-ds_read_b32 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:0   // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:128 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:256 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
-ds_read_b32 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:384 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:0   // offset : (iter(0) * MT0 * MFMA_K + MT0 * 0) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+1], v[vgprLocalReadAddrA] offset:128 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 1) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+2], v[vgprLocalReadAddrA] offset:256 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 2) * bpe(2)
+ds_read_u16 v[vgprValueATmp0+3], v[vgprLocalReadAddrA] offset:384 // offset : (iter(0) * MT0 * MFMA_K + MT0 * 3) * bpe(2)
 
 
 /* local read prefetch b */
 
-ds_read_b32 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:0   // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:128 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:256 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
-ds_read_b32 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:384 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:0   // offset : (iter(1) * MT1 * MFMA_K + MT1 * 0) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+1], v[vgprLocalReadAddrB] offset:128 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 1) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+2], v[vgprLocalReadAddrB] offset:256 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 2) * bpe(2)
+ds_read_u16 v[vgprValueBTmp0+3], v[vgprLocalReadAddrB] offset:384 // offset : (iter(1) * MT1 * MFMA_K + MT1 * 3) * bpe(2)
 
 
 /* local read inc a */
@@ -1855,21 +1775,11 @@ s_waitcnt lgkmcnt(0)                               // 4wait for local read
 .align32 8, 0xbf800001                             // align v_pk_fma
 
 /* get a */
-v_and_b32 v[vgprValueATmp0+0], 0x0000ffff, v[vgprValueATmp0+0]
-v_and_b32 v[vgprValueATmp0+1], 0x0000ffff, v[vgprValueATmp0+1]
 v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValueATmp0+1], 16, v[vgprValueATmp0+0]
-
-v_and_b32 v[vgprValueATmp0+2], 0x0000ffff, v[vgprValueATmp0+2]
-v_and_b32 v[vgprValueATmp0+3], 0x0000ffff, v[vgprValueATmp0+3]
 v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValueATmp0+3], 16, v[vgprValueATmp0+2]
 
 /* get b */
-v_and_b32 v[vgprValueBTmp0+0], 0x0000ffff, v[vgprValueBTmp0+0]
-v_and_b32 v[vgprValueBTmp0+1], 0x0000ffff, v[vgprValueBTmp0+1]
 v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValueBTmp0+1], 16, v[vgprValueBTmp0+0]
-
-v_and_b32 v[vgprValueBTmp0+2], 0x0000ffff, v[vgprValueBTmp0+2]
-v_and_b32 v[vgprValueBTmp0+3], 0x0000ffff, v[vgprValueBTmp0+3]
 v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValueBTmp0+3], 16, v[vgprValueBTmp0+2]
 
 s_nop 1
@@ -1888,11 +1798,13 @@ s_cbranch_scc1 label_0006                          // don't enter LoopL
 
 /* local read a */
 
-ds_read_b32 v[vgprValueATmp0+0], v[vgprLocalReadAddrA] offset:0
+ds_read_u16 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0
+v_mov_b32 v[vgprValuA_X0_I0+1], 0
 
 /* local read b */
 
-ds_read_b32 v[vgprValueBTmp0+0], v[vgprLocalReadAddrB] offset:0
+ds_read_u16 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0
+v_mov_b32 v[vgprValuB_X0_I0+1], 0
 
 /* local read inc a */
 
@@ -1908,14 +1820,6 @@ _v_add_co_u32 v[vgprLocalReadAddrB], vcc, s79, v[vgprLocalReadAddrB] // lrB += 6
 s_waitcnt lgkmcnt(0)                               // 4wait for local read
 
 .align32 8, 0xbf800001                             // align v_pk_fma
-
-/* get a */
-v_and_b32 v[vgprValuA_X0_I0+0], 0x0000ffff, v[vgprValueATmp0+0]
-v_mov_b32 v[vgprValuA_X0_I0+1], 0
-
-/* get b */
-v_and_b32 v[vgprValuB_X0_I0+0], 0x0000ffff, v[vgprValueBTmp0+0]
-v_mov_b32 v[vgprValuB_X0_I0+1], 0
 
 /* only front 32 thread get value for single K */
 v_and_b32 v43, 63, v[vgprSerial]
