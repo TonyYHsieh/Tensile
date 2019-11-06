@@ -890,18 +890,17 @@ s_waitcnt lgkmcnt(0)                               // 2prefetch wait for local w
 
 /* iter 0 */
 
-
 /* local read a */
-ds_read_b32 v[vgprValuC+0], v[vgprLocalReadAddrA] offset:0
-ds_read_b32 v[vgprValuC+1], v[vgprLocalReadAddrA] offset:64
-ds_read_b32 v[vgprValuC+2], v[vgprLocalReadAddrA] offset:128
-ds_read_b32 v[vgprValuC+3], v[vgprLocalReadAddrA] offset:192
+ds_read_u16 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0
+ds_read_u16 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:64
+ds_read_u16 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:128
+ds_read_u16 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:192
 
 /* local read b */
-ds_read_b32 v[vgprValuC+4], v[vgprLocalReadAddrB] offset:0
-ds_read_b32 v[vgprValuC+5], v[vgprLocalReadAddrB] offset:64
-ds_read_b32 v[vgprValuC+6], v[vgprLocalReadAddrB] offset:128
-ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:192
+ds_read_u16 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0
+ds_read_u16 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:64
+ds_read_u16 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:128
+ds_read_u16 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:192
 
 /* local read increment a */
 /* N/A, lro->32 */
@@ -911,42 +910,29 @@ ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:192
 s_waitcnt lgkmcnt(0)                               // wait for prior local read old=0 new=0
 .align32 8, 0xbf800001                             // align v_pk_fma
 
-/* get a */
-v_and_b32 v[vgprValuC+0], 0x0000ffff, v[vgprValuC+0]
-v_and_b32 v[vgprValuC+1], 0x0000ffff, v[vgprValuC+1]
-v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuC+1], 16, v[vgprValuC+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuA_X0_I0+1], 16, v[vgprValuA_X0_I0+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuA_X0_I0+3], 16, v[vgprValuA_X0_I0+2]
 
-v_and_b32 v[vgprValuC+2], 0x0000ffff, v[vgprValuC+2]
-v_and_b32 v[vgprValuC+3], 0x0000ffff, v[vgprValuC+3]
-v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuC+3], 16, v[vgprValuC+2]
+v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuB_X0_I0+1], 16, v[vgprValuB_X0_I0+0]
+v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuB_X0_I0+3], 16, v[vgprValuB_X0_I0+2]
 
-/* get b */
-v_and_b32 v[vgprValuC+4], 0x0000ffff, v[vgprValuC+4]
-v_and_b32 v[vgprValuC+5], 0x0000ffff, v[vgprValuC+5]
-v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuC+5], 16, v[vgprValuC+4]
-
-v_and_b32 v[vgprValuC+6], 0x0000ffff, v[vgprValuC+6]
-v_and_b32 v[vgprValuC+7], 0x0000ffff, v[vgprValuC+7]
-v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuC+7], 16, v[vgprValuC+6]
-
-s_nop 7
+s_nop 1
 
 v_mfma_f32_32x32x8f16 a[0:15], v[vgprValuA_X0_I0+0:vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0:vgprValuB_X0_I0+1], a[0:15]
 
 /* iter 8 */
 
-
 /* local read a */
-ds_read_b32 v[vgprValuC+0], v[vgprLocalReadAddrA] offset:512
-ds_read_b32 v[vgprValuC+1], v[vgprLocalReadAddrA] offset:576
-ds_read_b32 v[vgprValuC+2], v[vgprLocalReadAddrA] offset:640
-ds_read_b32 v[vgprValuC+3], v[vgprLocalReadAddrA] offset:704
+ds_read_u16 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:512
+ds_read_u16 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:576
+ds_read_u16 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:640
+ds_read_u16 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:704
 
 /* local read b */
-ds_read_b32 v[vgprValuC+4], v[vgprLocalReadAddrB] offset:512
-ds_read_b32 v[vgprValuC+5], v[vgprLocalReadAddrB] offset:576
-ds_read_b32 v[vgprValuC+6], v[vgprLocalReadAddrB] offset:640
-ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:704
+ds_read_u16 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:512
+ds_read_u16 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:576
+ds_read_u16 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:640
+ds_read_u16 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:704
 
 /* local read increment a */
 /* N/A, lro->288 */
@@ -956,25 +942,13 @@ ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:704
 s_waitcnt lgkmcnt(0)                               // wait for prior local read old=0 new=0
 .align32 8, 0xbf800001                             // align v_pk_fma
 
-/* get a */
-v_and_b32 v[vgprValuC+0], 0x0000ffff, v[vgprValuC+0]
-v_and_b32 v[vgprValuC+1], 0x0000ffff, v[vgprValuC+1]
-v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuC+1], 16, v[vgprValuC+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuA_X0_I0+1], 16, v[vgprValuA_X0_I0+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuA_X0_I0+3], 16, v[vgprValuA_X0_I0+2]
 
-v_and_b32 v[vgprValuC+2], 0x0000ffff, v[vgprValuC+2]
-v_and_b32 v[vgprValuC+3], 0x0000ffff, v[vgprValuC+3]
-v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuC+3], 16, v[vgprValuC+2]
+v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuB_X0_I0+1], 16, v[vgprValuB_X0_I0+0]
+v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuB_X0_I0+3], 16, v[vgprValuB_X0_I0+2]
 
-/* get b */
-v_and_b32 v[vgprValuC+4], 0x0000ffff, v[vgprValuC+4]
-v_and_b32 v[vgprValuC+5], 0x0000ffff, v[vgprValuC+5]
-v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuC+5], 16, v[vgprValuC+4]
-
-v_and_b32 v[vgprValuC+6], 0x0000ffff, v[vgprValuC+6]
-v_and_b32 v[vgprValuC+7], 0x0000ffff, v[vgprValuC+7]
-v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuC+7], 16, v[vgprValuC+6]
-
-s_nop 7
+s_nop 1
 
 v_mfma_f32_32x32x8f16 a[0:15], v[vgprValuA_X0_I0+0:vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0:vgprValuB_X0_I0+1], a[0:15]
 
@@ -983,16 +957,17 @@ v_mfma_f32_32x32x8f16 a[0:15], v[vgprValuA_X0_I0+0:vgprValuA_X0_I0+1], v[vgprVal
 
 
 /* local read a */
-ds_read_b32 v[vgprValuC+0], v[vgprLocalReadAddrA] offset:1024
-ds_read_b32 v[vgprValuC+1], v[vgprLocalReadAddrA] offset:1088
-ds_read_b32 v[vgprValuC+2], v[vgprLocalReadAddrA] offset:1152
-ds_read_b32 v[vgprValuC+3], v[vgprLocalReadAddrA] offset:1216
+ds_read_u16 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:1024
+ds_read_u16 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:1088
+ds_read_u16 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:1152
+ds_read_u16 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:1216
 
 /* local read b */
-ds_read_b32 v[vgprValuC+4], v[vgprLocalReadAddrB] offset:1024
-ds_read_b32 v[vgprValuC+5], v[vgprLocalReadAddrB] offset:1088
-ds_read_b32 v[vgprValuC+6], v[vgprLocalReadAddrB] offset:1152
-ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:1216
+ds_read_u16 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:1024
+ds_read_u16 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:1088
+ds_read_u16 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:1152
+ds_read_u16 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:1216
+
 
 /* local read increment a */
 /* N/A, lro->544 */
@@ -1002,42 +977,30 @@ ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:1216
 s_waitcnt lgkmcnt(0)                               // wait for prior local read old=0 new=0
 .align32 8, 0xbf800001                             // align v_pk_fma
 
-/* get a */
-v_and_b32 v[vgprValuC+0], 0x0000ffff, v[vgprValuC+0]
-v_and_b32 v[vgprValuC+1], 0x0000ffff, v[vgprValuC+1]
-v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuC+1], 16, v[vgprValuC+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuA_X0_I0+1], 16, v[vgprValuA_X0_I0+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuA_X0_I0+3], 16, v[vgprValuA_X0_I0+2]
 
-v_and_b32 v[vgprValuC+2], 0x0000ffff, v[vgprValuC+2]
-v_and_b32 v[vgprValuC+3], 0x0000ffff, v[vgprValuC+3]
-v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuC+3], 16, v[vgprValuC+2]
+v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuB_X0_I0+1], 16, v[vgprValuB_X0_I0+0]
+v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuB_X0_I0+3], 16, v[vgprValuB_X0_I0+2]
 
-/* get b */
-v_and_b32 v[vgprValuC+4], 0x0000ffff, v[vgprValuC+4]
-v_and_b32 v[vgprValuC+5], 0x0000ffff, v[vgprValuC+5]
-v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuC+5], 16, v[vgprValuC+4]
-
-v_and_b32 v[vgprValuC+6], 0x0000ffff, v[vgprValuC+6]
-v_and_b32 v[vgprValuC+7], 0x0000ffff, v[vgprValuC+7]
-v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuC+7], 16, v[vgprValuC+6]
-
-s_nop 7
+s_nop 1
 
 v_mfma_f32_32x32x8f16 a[0:15], v[vgprValuA_X0_I0+0:vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0:vgprValuB_X0_I0+1], a[0:15]
 
 /* iter 24 */
 
-
 /* local read a */
-ds_read_b32 v[vgprValuC+0], v[vgprLocalReadAddrA] offset:1536
-ds_read_b32 v[vgprValuC+1], v[vgprLocalReadAddrA] offset:1600
-ds_read_b32 v[vgprValuC+2], v[vgprLocalReadAddrA] offset:1664
-ds_read_b32 v[vgprValuC+3], v[vgprLocalReadAddrA] offset:1728
+ds_read_u16 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:1536
+ds_read_u16 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:1600
+ds_read_u16 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:1664
+ds_read_u16 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:1728
 
 /* local read b */
-ds_read_b32 v[vgprValuC+4], v[vgprLocalReadAddrB] offset:1536
-ds_read_b32 v[vgprValuC+5], v[vgprLocalReadAddrB] offset:1600
-ds_read_b32 v[vgprValuC+6], v[vgprLocalReadAddrB] offset:1664
-ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:1728
+ds_read_u16 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:1536
+ds_read_u16 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:1600
+ds_read_u16 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:1664
+ds_read_u16 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:1728
+
 
 /* local read increment a */
 /* N/A, lro->800 */
@@ -1047,25 +1010,13 @@ ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:1728
 s_waitcnt lgkmcnt(0)                               // wait for prior local read old=0 new=0
 .align32 8, 0xbf800001                             // align v_pk_fma
 
-/* get a */
-v_and_b32 v[vgprValuC+0], 0x0000ffff, v[vgprValuC+0]
-v_and_b32 v[vgprValuC+1], 0x0000ffff, v[vgprValuC+1]
-v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuC+1], 16, v[vgprValuC+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuA_X0_I0+1], 16, v[vgprValuA_X0_I0+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuA_X0_I0+3], 16, v[vgprValuA_X0_I0+2]
 
-v_and_b32 v[vgprValuC+2], 0x0000ffff, v[vgprValuC+2]
-v_and_b32 v[vgprValuC+3], 0x0000ffff, v[vgprValuC+3]
-v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuC+3], 16, v[vgprValuC+2]
+v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuB_X0_I0+1], 16, v[vgprValuB_X0_I0+0]
+v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuB_X0_I0+3], 16, v[vgprValuB_X0_I0+2]
 
-/* get b */
-v_and_b32 v[vgprValuC+4], 0x0000ffff, v[vgprValuC+4]
-v_and_b32 v[vgprValuC+5], 0x0000ffff, v[vgprValuC+5]
-v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuC+5], 16, v[vgprValuC+4]
-
-v_and_b32 v[vgprValuC+6], 0x0000ffff, v[vgprValuC+6]
-v_and_b32 v[vgprValuC+7], 0x0000ffff, v[vgprValuC+7]
-v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuC+7], 16, v[vgprValuC+6]
-
-s_nop 7
+s_nop 1
 
 v_mfma_f32_32x32x8f16 a[0:15], v[vgprValuA_X0_I0+0:vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0:vgprValuB_X0_I0+1], a[0:15]
 
@@ -1199,7 +1150,6 @@ s_waitcnt lgkmcnt(0)                               // 5wait for local write
 
 // Skip barrier: NumThreads=64
 
-// TODO: Tony
 /* tail loop: macs */
 
 s_cmp_le_u32 s[sgprLoopCounters+0], 0x0            // LoopCounterL < EndCounter
@@ -1211,17 +1161,16 @@ s_cmp_lt_i32 s[sgprLoopCounters+0], 0x8
 s_cbranch_scc1 label_00055
 
 /* local read a */
-ds_read_b32 v[vgprValuC+0], v[vgprLocalReadAddrA] offset:0
-ds_read_b32 v[vgprValuC+1], v[vgprLocalReadAddrA] offset:64
-ds_read_b32 v[vgprValuC+2], v[vgprLocalReadAddrA] offset:128
-ds_read_b32 v[vgprValuC+3], v[vgprLocalReadAddrA] offset:192
+ds_read_u16 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0
+ds_read_u16 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:64
+ds_read_u16 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:128
+ds_read_u16 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:192
 
 /* local read b */
-ds_read_b32 v[vgprValuC+4], v[vgprLocalReadAddrB] offset:0
-ds_read_b32 v[vgprValuC+5], v[vgprLocalReadAddrB] offset:64
-ds_read_b32 v[vgprValuC+6], v[vgprLocalReadAddrB] offset:128
-ds_read_b32 v[vgprValuC+7], v[vgprLocalReadAddrB] offset:192
-
+ds_read_u16 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0
+ds_read_u16 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:64
+ds_read_u16 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:128
+ds_read_u16 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:192
 
 /* local read inc a */
 
@@ -1238,25 +1187,13 @@ s_waitcnt lgkmcnt(0)                               // 4wait for local read
 
 .align32 8, 0xbf800001                             // align v_pk_fma
 
-/* get a */
-v_and_b32 v[vgprValuC+0], 0x0000ffff, v[vgprValuC+0]
-v_and_b32 v[vgprValuC+1], 0x0000ffff, v[vgprValuC+1]
-v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuC+1], 16, v[vgprValuC+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+0], v[vgprValuA_X0_I0+1], 16, v[vgprValuA_X0_I0+0]
+v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuA_X0_I0+3], 16, v[vgprValuA_X0_I0+2]
 
-v_and_b32 v[vgprValuC+2], 0x0000ffff, v[vgprValuC+2]
-v_and_b32 v[vgprValuC+3], 0x0000ffff, v[vgprValuC+3]
-v_lshl_or_b32 v[vgprValuA_X0_I0+1], v[vgprValuC+3], 16, v[vgprValuC+2]
+v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuB_X0_I0+1], 16, v[vgprValuB_X0_I0+0]
+v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuB_X0_I0+3], 16, v[vgprValuB_X0_I0+2]
 
-/* get b */
-v_and_b32 v[vgprValuC+4], 0x0000ffff, v[vgprValuC+4]
-v_and_b32 v[vgprValuC+5], 0x0000ffff, v[vgprValuC+5]
-v_lshl_or_b32 v[vgprValuB_X0_I0+0], v[vgprValuC+5], 16, v[vgprValuC+4]
-
-v_and_b32 v[vgprValuC+6], 0x0000ffff, v[vgprValuC+6]
-v_and_b32 v[vgprValuC+7], 0x0000ffff, v[vgprValuC+7]
-v_lshl_or_b32 v[vgprValuB_X0_I0+1], v[vgprValuC+7], 16, v[vgprValuC+6]
-
-s_nop 7
+s_nop 1
 
 v_mfma_f32_32x32x8f16 a[0:15], v[vgprValuA_X0_I0+0:vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0:vgprValuB_X0_I0+1], a[0:15]
 
@@ -1271,13 +1208,14 @@ label_00055:
 s_cmp_le_i32 s[sgprLoopCounters+0], 0x0            // LoopCounterL < EndCounter
 s_cbranch_scc1 label_0006                          // don't enter LoopL
 
-/* local read a */
 
-ds_read_b32 v[vgprValuC+0], v[vgprLocalReadAddrA] offset:0
+/* local read a */
+ds_read_u16 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0
+v_mov_b32 v[vgprValuA_X0_I0+1], 0
 
 /* local read b */
-
-ds_read_b32 v[vgprValuC+4], v[vgprLocalReadAddrB] offset:0
+ds_read_u16 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0
+v_mov_b32 v[vgprValuB_X0_I0+1], 0
 
 /* local read inc a */
 
@@ -1293,14 +1231,6 @@ _v_add_co_u32 v[vgprLocalReadAddrB], vcc, s79, v[vgprLocalReadAddrB] // lrB += 6
 s_waitcnt lgkmcnt(0)                               // 4wait for local read
 
 .align32 8, 0xbf800001                             // align v_pk_fma
-
-/* get a */
-v_and_b32 v[vgprValuA_X0_I0+0], 0x0000ffff, v[vgprValuC+0]
-v_mov_b32 v[vgprValuA_X0_I0+1], 0
-
-/* get b */
-v_and_b32 v[vgprValuB_X0_I0+0], 0x0000ffff, v[vgprValuC+4]
-v_mov_b32 v[vgprValuB_X0_I0+1], 0
 
 /* only front 32 thread get value for single K */
 v_and_b32 v31, 63, v[vgprSerial]
@@ -1330,65 +1260,49 @@ Summation_End_11:
 v_accvgpr_read_b32 v8, a0
 v_accvgpr_read_b32 v9, a1
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+0], v9, 16, v8
 
 v_accvgpr_read_b32 v8, a2
 v_accvgpr_read_b32 v9, a3
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+1], v9, 16, v8
 
 v_accvgpr_read_b32 v8, a4
 v_accvgpr_read_b32 v9, a5
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+2], v9, 16, v8
 
 v_accvgpr_read_b32 v8, a6
 v_accvgpr_read_b32 v9, a7
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+3], v9, 16, v8
 
 v_accvgpr_read_b32 v8, a8
 v_accvgpr_read_b32 v9, a9
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+4], v9, 16, v8
 
 v_accvgpr_read_b32 v8, a10
 v_accvgpr_read_b32 v9, a11
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+5], v9, 16, v8
 
 v_accvgpr_read_b32 v8, a12
 v_accvgpr_read_b32 v9, a13
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+6], v9, 16, v8
 
 v_accvgpr_read_b32 v8, a14
 v_accvgpr_read_b32 v9, a15
 v_cvt_f16_f32_e32 v8, v8
-v_and_b32 v8, 0x0000ffff, v8
 v_cvt_f16_f32_e32 v9, v9
-v_and_b32 v9, 0x0000ffff, v9
 v_lshl_or_b32 v[vgprValuC+7], v9, 16, v8
 
 /* endSummation: add vgpr 8...28 to pool */
