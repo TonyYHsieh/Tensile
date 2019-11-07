@@ -536,37 +536,58 @@ s_waitcnt lgkmcnt(0)                               // wait for 144 bytes of kern
 /* Local Read Addresses                   */
 /******************************************/
 
+/* wave index */
+// waveId = (serial % (SG0I * SG1J)) / WAVE_SIZE
+v_and_b32 v5, 255, v[vgprSerial]
+v_lshrrev_b32 v5, 6, v5
+
+// v5 : waveIdx = wave_id % 2
+// v6 : waveIdy = wave_id / 2
+v_lshrrev_b32 v6, 1, v5
+v_and_b32 v5, 1, v5
+
 
 /* local read addresses: tile assignments a */
 
-/*lr0I = serial % SG0I*/
-v_lshrrev_b32 v0, 4, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / 16
-v_and_b32 v1, 15, v[vgprSerial]                    // vectorStaticDiv: v1 = v[vgprSerial] % 16
+/* lr0I = serial % MFMA_MN */
+// v1 : lr0I, lr1I
+v_lshrrev_b32 v0, 5, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / MFMA_MN
+v_and_b32 v1, 31, v[vgprSerial]                    // vectorStaticDiv: v1 = v[vgprSerial] % MFMA_MN
 
 
 /* local read addresses: tile assignments b */
-
-/*lr1J = (serial / SG1J) % SG1J*/
-v_lshrrev_b32 v2, 4, v0                            // vectorStaticDiv: v2 = v0 / 16
-v_and_b32 v3, 15, v0                               // vectorStaticDiv: v3 = v0 % 16
+/* lrL = (serial / MFMA_MN) % MFMA_K */
+// v3 : lrL
+// v2 : waveId
+v_lshrrev_b32 v2, 1, v0                            // vectorStaticDiv: v2 = v0 / MFMA_K
+v_and_b32 v3, 1, v0                               // vectorStaticDiv: v3 = v0 % MFMA_K
 
 
 /* local read addresses: final offsets a */
-
-v_lshrrev_b32 v0, 8, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / 256
-v_and_b32 v2, 255, v[vgprSerial]                   // vectorStaticDiv: v2 = v[vgprSerial] % 256
-s_mov_b32 s73, 0x80                                // MT0+PAD
-v_mul_lo_u32 v0, s73, v0                           // sgid=sgid*(MT0+PAD)
-_v_add_lshl_u32 v[vgprLocalReadAddrA], v0, v1, 0x2 // o = (lroA*VW+sgid*MT0)*bpe
-
+// v0 : sgId
+s_mov_b32 s73, 0x80                                // 1. (MT0+PAD)
+v_mul_lo_u32 v2, s73, v3                           // 1. v2 : lrL*(MT0+PAD)
+_v_add_u32 v0, v1, v2                              // 1. v0 : lr0I + lrL*(MT0+PAD)
+s_mov_b32 s73, 0x20                                // 2. MFMA_MN : 32
+v_mul_lo_u32 v2, s73, v5                           // 2. v2 : waveIdx * MFMA_M_N
+_v_add_u32 v0, v0, v2                              // 2. v0 : lr0I + lrL*(MT0+PAD) + waveIdx * MFMA_M_N
+v_lshrrev_b32 v2, 8, v[vgprSerial]                 // 3. vectorStaticDiv: v2 = v[vgprSerial] / 256 : sgId
+s_mov_b32 s73, 0x100                               // 3. MFMA_K*(MT0+PAD)
+v_mul_lo_u32 v2, s73, v2                           // 3. v2 : sgid * MFMA_K * (MT0+PAD)
+_v_add_lshl_u32 v[vgprLocalReadAddrA], v0, v2, 0x2 // 3. v[vgprLocalReadAddrA] = (lr0I + (lrL*(MT0+PAD)) + (waveIdx * MFMA_M_N) + (sgid * MFMA_K * (MT0+PAD))) * 4(bpe)
 
 /* local read addresses: final offsets b */
+s_mov_b32 s73, 0x80                                // 1. (MT0+PAD)
+v_mul_lo_u32 v2, s73, v3                           // 1. v2 : lrL*(MT0+PAD)
+_v_add_u32 v0, v1, v2                              // 1. v0 : lr1J + lrL*(MT0+PAD)
+s_mov_b32 s73, 0x20                                // 2. MFMA_MN : 32
+v_mul_lo_u32 v2, s73, v6                           // 2. v2 : waveIdx * MFMA_M_N
+_v_add_u32 v0, v0, v2                              // 2. v0 : lr0I + lrL*(MT0+PAD) + waveIdx * MFMA_M_N
+v_lshrrev_b32 v2, 8, v[vgprSerial]                 // 3. vectorStaticDiv: v2 = v[vgprSerial] / 256 : sgId
+s_mov_b32 s73, 0x100                                // 3. MFMA_K*(MT0+PAD)
+v_mul_lo_u32 v2, s73, v2                           // 3. v2 : sgid * MFMA_K * (MT0+PAD)
+_v_add_lshl_u32 v[vgprLocalReadAddrB], v0, v2, 0x2 // 3. o = (lroB*VW+sgid*MT1)*bpe
 
-v_lshrrev_b32 v0, 8, v[vgprSerial]                 // vectorStaticDiv: v0 = v[vgprSerial] / 256
-v_and_b32 v1, 255, v[vgprSerial]                   // vectorStaticDiv: v1 = v[vgprSerial] % 256
-s_mov_b32 s73, 0x80                                // MT1+PAD
-v_mul_lo_u32 v0, s73, v0                           // sgid=sgid*(MT1+PAD)
-_v_add_lshl_u32 v[vgprLocalReadAddrB], v0, v3, 0x2 // o = (lroB*VW+sgid*MT1)*bpe
 
 
 /* local read addresses: declare addresses a */
@@ -763,72 +784,77 @@ _v_add_co_u32 v[vgprLocalWriteAddrB], vcc, 0x800, v[vgprLocalWriteAddrB] // lwFO
 
 
 /* declare loop num iterations */
+v_mov_b32 v[vgprValuC+ 0], 0x0
+s_nop 7
+s_nop 7
+v_accvgpr_write_b32 a0,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a1,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a2,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a3,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a4,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a5,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a6,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a7,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a8,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a9,  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a10, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a11, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a12, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a13, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a14, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a15, v[vgprValuC+ 0] // initC
 
+v_accvgpr_write_b32 a16  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a17  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a18  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a19  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a20  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a21  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a22  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a23  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a24  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a25  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a26, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a27, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a28, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a29, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a30, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a31, v[vgprValuC+ 0] // initC
 
-v_mov_b32 v[vgprValuC+0], 0x0                      // initC
-v_mov_b32 v[vgprValuC+1], 0x0                      // initC
-v_mov_b32 v[vgprValuC+2], 0x0                      // initC
-v_mov_b32 v[vgprValuC+3], 0x0                      // initC
-v_mov_b32 v[vgprValuC+4], 0x0                      // initC
-v_mov_b32 v[vgprValuC+5], 0x0                      // initC
-v_mov_b32 v[vgprValuC+6], 0x0                      // initC
-v_mov_b32 v[vgprValuC+7], 0x0                      // initC
-v_mov_b32 v[vgprValuC+8], 0x0                      // initC
-v_mov_b32 v[vgprValuC+9], 0x0                      // initC
-v_mov_b32 v[vgprValuC+10], 0x0                     // initC
-v_mov_b32 v[vgprValuC+11], 0x0                     // initC
-v_mov_b32 v[vgprValuC+12], 0x0                     // initC
-v_mov_b32 v[vgprValuC+13], 0x0                     // initC
-v_mov_b32 v[vgprValuC+14], 0x0                     // initC
-v_mov_b32 v[vgprValuC+15], 0x0                     // initC
-v_mov_b32 v[vgprValuC+16], 0x0                     // initC
-v_mov_b32 v[vgprValuC+17], 0x0                     // initC
-v_mov_b32 v[vgprValuC+18], 0x0                     // initC
-v_mov_b32 v[vgprValuC+19], 0x0                     // initC
-v_mov_b32 v[vgprValuC+20], 0x0                     // initC
-v_mov_b32 v[vgprValuC+21], 0x0                     // initC
-v_mov_b32 v[vgprValuC+22], 0x0                     // initC
-v_mov_b32 v[vgprValuC+23], 0x0                     // initC
-v_mov_b32 v[vgprValuC+24], 0x0                     // initC
-v_mov_b32 v[vgprValuC+25], 0x0                     // initC
-v_mov_b32 v[vgprValuC+26], 0x0                     // initC
-v_mov_b32 v[vgprValuC+27], 0x0                     // initC
-v_mov_b32 v[vgprValuC+28], 0x0                     // initC
-v_mov_b32 v[vgprValuC+29], 0x0                     // initC
-v_mov_b32 v[vgprValuC+30], 0x0                     // initC
-v_mov_b32 v[vgprValuC+31], 0x0                     // initC
-v_mov_b32 v[vgprValuC+32], 0x0                     // initC
-v_mov_b32 v[vgprValuC+33], 0x0                     // initC
-v_mov_b32 v[vgprValuC+34], 0x0                     // initC
-v_mov_b32 v[vgprValuC+35], 0x0                     // initC
-v_mov_b32 v[vgprValuC+36], 0x0                     // initC
-v_mov_b32 v[vgprValuC+37], 0x0                     // initC
-v_mov_b32 v[vgprValuC+38], 0x0                     // initC
-v_mov_b32 v[vgprValuC+39], 0x0                     // initC
-v_mov_b32 v[vgprValuC+40], 0x0                     // initC
-v_mov_b32 v[vgprValuC+41], 0x0                     // initC
-v_mov_b32 v[vgprValuC+42], 0x0                     // initC
-v_mov_b32 v[vgprValuC+43], 0x0                     // initC
-v_mov_b32 v[vgprValuC+44], 0x0                     // initC
-v_mov_b32 v[vgprValuC+45], 0x0                     // initC
-v_mov_b32 v[vgprValuC+46], 0x0                     // initC
-v_mov_b32 v[vgprValuC+47], 0x0                     // initC
-v_mov_b32 v[vgprValuC+48], 0x0                     // initC
-v_mov_b32 v[vgprValuC+49], 0x0                     // initC
-v_mov_b32 v[vgprValuC+50], 0x0                     // initC
-v_mov_b32 v[vgprValuC+51], 0x0                     // initC
-v_mov_b32 v[vgprValuC+52], 0x0                     // initC
-v_mov_b32 v[vgprValuC+53], 0x0                     // initC
-v_mov_b32 v[vgprValuC+54], 0x0                     // initC
-v_mov_b32 v[vgprValuC+55], 0x0                     // initC
-v_mov_b32 v[vgprValuC+56], 0x0                     // initC
-v_mov_b32 v[vgprValuC+57], 0x0                     // initC
-v_mov_b32 v[vgprValuC+58], 0x0                     // initC
-v_mov_b32 v[vgprValuC+59], 0x0                     // initC
-v_mov_b32 v[vgprValuC+60], 0x0                     // initC
-v_mov_b32 v[vgprValuC+61], 0x0                     // initC
-v_mov_b32 v[vgprValuC+62], 0x0                     // initC
-v_mov_b32 v[vgprValuC+63], 0x0                     // initC
+v_accvgpr_write_b32 a32  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a33  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a34  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a35  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a36  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a37  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a38  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a39  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a40  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a41  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a42, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a43, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a44, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a45, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a46, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a47, v[vgprValuC+ 0] // initC
+
+v_accvgpr_write_b32 a48  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a49  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a50  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a51  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a52  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a53  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a54  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a55  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a56  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a57  v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a58, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a59, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a60, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a61, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a62, v[vgprValuC+ 0] // initC
+v_accvgpr_write_b32 a63, v[vgprValuC+ 0] // initC
+
 
 s_lshr_b32 s[sgprLoopCounters+0], s[sgprSizesSum+0], 2 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 4
 s_mov_b32 s[sgprOrigLoopCounter], s[sgprLoopCounters+0] // copy loop counter
@@ -950,23 +976,11 @@ s_barrier //
 
 /* local read a */
 ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:128 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:192 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+4], v[vgprLocalReadAddrA] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+5], v[vgprLocalReadAddrA] offset:320 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+6], v[vgprLocalReadAddrA] offset:384 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+7], v[vgprLocalReadAddrA] offset:448 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read b */
 ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:128 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:192 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+4], v[vgprLocalReadAddrB] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+5], v[vgprLocalReadAddrB] offset:320 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+6], v[vgprLocalReadAddrB] offset:384 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+7], v[vgprLocalReadAddrB] offset:448 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read increment a */
 /* N/A, lro->128 */
@@ -974,61 +988,22 @@ ds_read_b32 v[vgprValuB_X0_I0+7], v[vgprLocalReadAddrB] offset:448 // L -> Reg l
 /* local read increment b */
 /* N/A, lro->128 */
 s_waitcnt lgkmcnt(0)                               // wait for prior local read old=0 new=0
-MAC_8x8_X0
 
-/* iter 1 */
-
-
-/* local read a */
-ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:512 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:576 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:640 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:704 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+4], v[vgprLocalReadAddrA] offset:768 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+5], v[vgprLocalReadAddrA] offset:832 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+6], v[vgprLocalReadAddrA] offset:896 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+7], v[vgprLocalReadAddrA] offset:960 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
-
-/* local read b */
-ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:512 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:576 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:640 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:704 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+4], v[vgprLocalReadAddrB] offset:768 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+5], v[vgprLocalReadAddrB] offset:832 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+6], v[vgprLocalReadAddrB] offset:896 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+7], v[vgprLocalReadAddrB] offset:960 // L -> Reg lro=128 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
-
-/* local read increment a */
-/* N/A, lro->256 */
-
-/* local read increment b */
-/* N/A, lro->256 */
-s_waitcnt lgkmcnt(0)                               // wait for prior local read old=0 new=0
-MAC_8x8_X0
+v_mfma_f32_32x32x2f32 a[ 0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[ 0:15]
+v_mfma_f32_32x32x2f32 a[16:31], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0], a[16:31]
+v_mfma_f32_32x32x2f32 a[32:47], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+1], a[32:47]
+v_mfma_f32_32x32x2f32 a[48:63], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+1], a[48:63]
 
 /* iter 2 */
 
 
 /* local read a */
 ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:1024 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:1088 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:1152 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:1216 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+4], v[vgprLocalReadAddrA] offset:1280 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+5], v[vgprLocalReadAddrA] offset:1344 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+6], v[vgprLocalReadAddrA] offset:1408 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+7], v[vgprLocalReadAddrA] offset:1472 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:1280 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read b */
 ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:1024 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:1088 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:1152 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:1216 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+4], v[vgprLocalReadAddrB] offset:1280 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+5], v[vgprLocalReadAddrB] offset:1344 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+6], v[vgprLocalReadAddrB] offset:1408 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+7], v[vgprLocalReadAddrB] offset:1472 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:1280 // L -> Reg lro=256 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
 
 /* local read increment a */
 /* N/A, lro->384 */
@@ -1036,42 +1011,12 @@ ds_read_b32 v[vgprValuB_X0_I0+7], v[vgprLocalReadAddrB] offset:1472 // L -> Reg 
 /* local read increment b */
 /* N/A, lro->384 */
 s_waitcnt lgkmcnt(0)                               // wait for prior local read old=0 new=0
-MAC_8x8_X0
 
+v_mfma_f32_32x32x2f32 a[ 0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[ 0:15]
+v_mfma_f32_32x32x2f32 a[16:31], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0], a[16:31]
+v_mfma_f32_32x32x2f32 a[32:47], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+1], a[32:47]
+v_mfma_f32_32x32x2f32 a[48:63], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+1], a[48:63]
 
-
-/* iter 3 (last) */
-
-
-/* local read a */
-ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:1536 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:1600 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:1664 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:1728 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+4], v[vgprLocalReadAddrA] offset:1792 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+5], v[vgprLocalReadAddrA] offset:1856 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+6], v[vgprLocalReadAddrA] offset:1920 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+7], v[vgprLocalReadAddrA] offset:1984 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
-
-/* local read b */
-ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:1536 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:1600 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:1664 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:1728 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+4], v[vgprLocalReadAddrB] offset:1792 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+5], v[vgprLocalReadAddrB] offset:1856 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+6], v[vgprLocalReadAddrB] offset:1920 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+7], v[vgprLocalReadAddrB] offset:1984 // L -> Reg lro=384 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
-
-/* local read init pointers a */
-
-/* localReadInitPointers */
-
-/* local read init pointers b */
-
-/* localReadInitPointers */
-s_waitcnt lgkmcnt(0)                               // 1wait for local read old=0 new=0
-MAC_8x8_X0
 
 /******************************************/
 /* Unrolled Loop - End                    */
@@ -1163,57 +1108,167 @@ s_barrier //
 s_cmp_le_u32 s[sgprLoopCounters+0], 0x0            // LoopCounterL < EndCounter
 s_cbranch_scc1 label_0006                          // don't enter LoopL
 s_mov_b32 s[sgprOrigLoopCounter], 0                // repurpose to count each localRead increment
+
 label_0005:
+s_cmp_le_i32 s[sgprLoopCounters+0], 0x1            // LoopCounterL < EndCounter
+s_cbranch_scc1 label_00055
 
 
 /* local read a */
 
 ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+2], v[vgprLocalReadAddrA] offset:128 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+3], v[vgprLocalReadAddrA] offset:192 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+4], v[vgprLocalReadAddrA] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+5], v[vgprLocalReadAddrA] offset:320 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+6], v[vgprLocalReadAddrA] offset:384 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuA_X0_I0+7], v[vgprLocalReadAddrA] offset:448 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
 
 
 /* local read b */
 
 ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:64 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+2], v[vgprLocalReadAddrB] offset:128 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=2 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+3], v[vgprLocalReadAddrB] offset:192 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=3 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+4], v[vgprLocalReadAddrB] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=4 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+5], v[vgprLocalReadAddrB] offset:320 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=5 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+6], v[vgprLocalReadAddrB] offset:384 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=6 rIdx=0 oIdx=0 buffer=0 iui=0
-ds_read_b32 v[vgprValuB_X0_I0+7], v[vgprLocalReadAddrB] offset:448 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=7 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
 
 
 /* local read inc a */
 
-s_mov_b32 s73, 0x200                               // inc
+s_mov_b32 s73, 0x400                               // inc
 _v_add_co_u32 v[vgprLocalReadAddrA], vcc, s73, v[vgprLocalReadAddrA] // lrA += 512 (LSU*(MT+PAD)*bpe)
 
 
 /* local read inc b */
 
-s_mov_b32 s73, 0x200                               // inc
+s_mov_b32 s73, 0x400                               // inc
 _v_add_co_u32 v[vgprLocalReadAddrB], vcc, s73, v[vgprLocalReadAddrB] // lrB += 512 (LSU*(MT+PAD)*bpe)
 
 s_waitcnt lgkmcnt(0)                               // 4wait for local read
 
-MAC_8x8_X0
+v_mfma_f32_32x32x2f32 a[ 0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[ 0:15]
+v_mfma_f32_32x32x2f32 a[16:31], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0], a[16:31]
+v_mfma_f32_32x32x2f32 a[32:47], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+1], a[32:47]
+v_mfma_f32_32x32x2f32 a[48:63], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+1], a[48:63]
+
 
 /* closeLoop loopL finalLoop=1 tailLoop=1 */
+
+s_sub_u32 s[sgprLoopCounters+0], s[sgprLoopCounters+0], 0x2 // dec counterL (toilLoop)
+s_add_u32 s[sgprOrigLoopCounter], s[sgprOrigLoopCounter], 0x2 // inc counterL
+s_cmp_le_i32 s[sgprLoopCounters+0], 0x1            // counterL==0
+s_cbranch_scc0 label_0005                          // restart LoopL
+
+
+
+label_00055:
+
+s_cmp_le_i32 s[sgprLoopCounters+0], 0x0            // LoopCounterL < EndCounter
+s_cbranch_scc1 label_0006
+
+/* local read a */
+
+ds_read_b32 v[vgprValuA_X0_I0+0], v[vgprLocalReadAddrA] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuA_X0_I0+1], v[vgprLocalReadAddrA] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
+
+/* local read b */
+
+ds_read_b32 v[vgprValuB_X0_I0+0], v[vgprLocalReadAddrB] offset:0 // L -> Reg lro=0 swapByteOffset=0 ti=8 vIdx=0 rIdx=0 oIdx=0 buffer=0 iui=0
+ds_read_b32 v[vgprValuB_X0_I0+1], v[vgprLocalReadAddrB] offset:256 // L -> Reg lro=0 swapByteOffset=0 ti=16 vIdx=1 rIdx=0 oIdx=0 buffer=0 iui=0
+
+s_waitcnt lgkmcnt(0)                               // 4wait for local read
+
+v_and_b32 v87, 63, v[vgprSerial]                    // vectorStaticDiv: v2 = v[vgprSerial] % 64
+
+v_cmp_lt_u32 s[74:75], v87, 0x20
+
+v_cndmask_b32 v[vgprValuA_X0_I0+0], 0, v[vgprValuA_X0_I0+0], s[74:75]
+v_cndmask_b32 v[vgprValuA_X0_I0+1], 0, v[vgprValuA_X0_I0+1], s[74:75]
+
+v_cndmask_b32 v[vgprValuB_X0_I0+0], 0, v[vgprValuB_X0_I0+0], s[74:75]
+v_cndmask_b32 v[vgprValuB_X0_I0+1], 0, v[vgprValuB_X0_I0+1], s[74:75]
+
+v_mfma_f32_32x32x2f32 a[ 0:15], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+0], a[ 0:15]
+v_mfma_f32_32x32x2f32 a[16:31], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+0], a[16:31]
+v_mfma_f32_32x32x2f32 a[32:47], v[vgprValuA_X0_I0+0], v[vgprValuB_X0_I0+1], a[32:47]
+v_mfma_f32_32x32x2f32 a[48:63], v[vgprValuA_X0_I0+1], v[vgprValuB_X0_I0+1], a[48:63]
+
 s_sub_u32 s[sgprLoopCounters+0], s[sgprLoopCounters+0], 0x1 // dec counterL (toilLoop)
 s_add_u32 s[sgprOrigLoopCounter], s[sgprOrigLoopCounter], 0x1 // inc counterL
 s_cmp_eq_i32 s[sgprLoopCounters+0], 0x0            // counterL==0
-s_cbranch_scc0 label_0005                          // restart LoopL
+s_cbranch_scc0 label_00055                         // restart LoopL
 label_0006:
 
 Summation_End_11:
 /* endSummation: add vgpr 64...84 to pool */
+
+/* read c value from accumualted register bank */
+s_nop 7
+v_accvgpr_read_b32 v[vgprValuC+ 0], a0
+v_accvgpr_read_b32 v[vgprValuC+ 1], a1
+v_accvgpr_read_b32 v[vgprValuC+ 2], a2
+v_accvgpr_read_b32 v[vgprValuC+ 3], a3
+v_accvgpr_read_b32 v[vgprValuC+ 4], a4
+v_accvgpr_read_b32 v[vgprValuC+ 5], a5
+v_accvgpr_read_b32 v[vgprValuC+ 6], a6
+v_accvgpr_read_b32 v[vgprValuC+ 7], a7
+v_accvgpr_read_b32 v[vgprValuC+ 8], a8
+v_accvgpr_read_b32 v[vgprValuC+ 9], a9
+v_accvgpr_read_b32 v[vgprValuC+10], a10
+v_accvgpr_read_b32 v[vgprValuC+11], a11
+v_accvgpr_read_b32 v[vgprValuC+12], a12
+v_accvgpr_read_b32 v[vgprValuC+13], a13
+v_accvgpr_read_b32 v[vgprValuC+14], a14
+v_accvgpr_read_b32 v[vgprValuC+15], a15
+
+s_nop 7
+v_accvgpr_read_b32 v[vgprValuC+16], a16
+v_accvgpr_read_b32 v[vgprValuC+17], a17
+v_accvgpr_read_b32 v[vgprValuC+18], a18
+v_accvgpr_read_b32 v[vgprValuC+19], a19
+v_accvgpr_read_b32 v[vgprValuC+20], a20
+v_accvgpr_read_b32 v[vgprValuC+21], a21
+v_accvgpr_read_b32 v[vgprValuC+22], a22
+v_accvgpr_read_b32 v[vgprValuC+23], a23
+v_accvgpr_read_b32 v[vgprValuC+24], a24
+v_accvgpr_read_b32 v[vgprValuC+25], a25
+v_accvgpr_read_b32 v[vgprValuC+26], a26
+v_accvgpr_read_b32 v[vgprValuC+27], a27
+v_accvgpr_read_b32 v[vgprValuC+28], a28
+v_accvgpr_read_b32 v[vgprValuC+29], a29
+v_accvgpr_read_b32 v[vgprValuC+30], a30
+v_accvgpr_read_b32 v[vgprValuC+31], a31
+
+s_nop 7
+v_accvgpr_read_b32 v[vgprValuC+32], a32
+v_accvgpr_read_b32 v[vgprValuC+33], a33
+v_accvgpr_read_b32 v[vgprValuC+34], a34
+v_accvgpr_read_b32 v[vgprValuC+35], a35
+v_accvgpr_read_b32 v[vgprValuC+36], a36
+v_accvgpr_read_b32 v[vgprValuC+37], a37
+v_accvgpr_read_b32 v[vgprValuC+38], a38
+v_accvgpr_read_b32 v[vgprValuC+39], a39
+v_accvgpr_read_b32 v[vgprValuC+40], a40
+v_accvgpr_read_b32 v[vgprValuC+41], a41
+v_accvgpr_read_b32 v[vgprValuC+42], a42
+v_accvgpr_read_b32 v[vgprValuC+43], a43
+v_accvgpr_read_b32 v[vgprValuC+44], a44
+v_accvgpr_read_b32 v[vgprValuC+45], a45
+v_accvgpr_read_b32 v[vgprValuC+46], a46
+v_accvgpr_read_b32 v[vgprValuC+47], a47
+
+s_nop 7
+v_accvgpr_read_b32 v[vgprValuC+48], a48
+v_accvgpr_read_b32 v[vgprValuC+49], a49
+v_accvgpr_read_b32 v[vgprValuC+50], a50
+v_accvgpr_read_b32 v[vgprValuC+51], a51
+v_accvgpr_read_b32 v[vgprValuC+52], a52
+v_accvgpr_read_b32 v[vgprValuC+53], a53
+v_accvgpr_read_b32 v[vgprValuC+54], a54
+v_accvgpr_read_b32 v[vgprValuC+55], a55
+v_accvgpr_read_b32 v[vgprValuC+56], a56
+v_accvgpr_read_b32 v[vgprValuC+57], a57
+v_accvgpr_read_b32 v[vgprValuC+58], a58
+v_accvgpr_read_b32 v[vgprValuC+59], a59
+v_accvgpr_read_b32 v[vgprValuC+60], a60
+v_accvgpr_read_b32 v[vgprValuC+61], a61
+v_accvgpr_read_b32 v[vgprValuC+62], a62
+v_accvgpr_read_b32 v[vgprValuC+63], a63
+
+
 
 s_mov_b32 s[sgprSrdD+0], s[sgprAddressD+0]         // init SRD base address (lower)
 s_mov_b32 s[sgprSrdD+1], s[sgprAddressD+1]         // init SRD base address (upper) + other fields
@@ -1248,9 +1303,29 @@ s_addc_u32 s[sgprSrdD+1], s[sgprSrdD+1], s57       // add hi to SRD
 
 /* not-LocalSplitU: global write indices */
 
+/* wave index */
+// v18 : waveId = (serial % (SG0I * SG1J)) / WAVE_SIZE
+v_and_b32 v66, 255, v[vgprSerial]
+v_lshrrev_b32 v66, 6, v66
+
+// v66 : waveIdx = wave_id % MFMA_K
+// v67 : waveIdy = wave_id / MFMA_K
+v_lshrrev_b32 v67, 1, v66
+v_and_b32 v66, 1, v66
+
+
 /* computeStoreVgprs */
-v_lshrrev_b32 v65, 4, v[vgprSerial]                // vectorStaticDiv: v65 = v[vgprSerial] / 16
-v_and_b32 v64, 15, v[vgprSerial]                   // vectorStaticDiv: v64 = v[vgprSerial] % 16
+// v17: ldx1
+// v16: ldx0
+// v18: ldx1 * stirde_C
+v_lshrrev_b32 v64, 5, v[vgprSerial]                // v64 : lidx = (v[vgprSerial] / MFMA_MN) % MFMA_K
+v_and_b32 v64, 1, v64                              // v64 : lidx = (v[vgprSerial] / MFMA_MN) % MFMA_K
+v_mul_lo_u32 v64, v64, 4
+v_mul_lo_u32 v66, v66, 32                          // waveIdx * MFMA_MN
+_v_add_u32 v64, v64, v66                           // v64 : lidx = ((v[vgprSerial] / MFMA_MN) % MFMA_K) + waveIdx * MFMA_MN
+v_and_b32 v65, 31, v[vgprSerial]                   // v65 : lidy = (v[vgprSerial] % MFMA_MN)
+v_mul_lo_u32 v67, v67, 32                          // waveIdy * MFMA_MN
+_v_add_u32 v65, v65, v67                           // v65 : lidy = (v[vgprSerial] % MFMA_MN) + waveIdy * MFMA_MN
 v_mul_lo_u32 v66, v65, s[sgprStridesC+0]           // rowStart vgpr
 
 s_mul_i32 s56, 0x80, s[sgprWorkGroup0]             // s56 = wg0*MT0
@@ -1277,6 +1352,7 @@ s_cmp_ge_u32 s[sgprWorkGroup1], s58                // wg1 >= nwg1-1
 s_cselect_b32 s56, s56, 0                          // set rMT1
 s_cmpk_gt_u32 s56, 0x0                             // rMT1 > 0
 s_cbranch_scc1 GW_B0_E1_17                         // jump if edges required
+
 GW_B0_E0_14:
 
 /* allocate 2 sgpr. perBatch=2 perElement=0 elements=64 */
@@ -1421,91 +1497,90 @@ v_mul_f32 v[vgprValuC+62], s[sgprAlpha], v[vgprValuC+62] // *= alpha
 v_mul_f32 v[vgprValuC+63], s[sgprAlpha], v[vgprValuC+63] // *= alpha
 
 /* apply mask, calc new C and issue write */
-buffer_store_dword v0, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v1, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v2, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v3, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v4, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v5, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v6, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v7, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
+buffer_store_dword  v0, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword  v1, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
+buffer_store_dword  v2, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
+buffer_store_dword  v3, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
+
+buffer_store_dword  v4, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
+buffer_store_dword  v5, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:36,  // store D
+buffer_store_dword  v6, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:40,  // store D
+buffer_store_dword  v7, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:44,  // store D
+
+buffer_store_dword  v8, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword  v9, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:68,  // store D
+buffer_store_dword v10, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:72,  // store D
+buffer_store_dword v11, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:76,  // store D
+
+buffer_store_dword v12, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
+buffer_store_dword v13, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:100,  // store D
+buffer_store_dword v14, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:104,  // store D
+buffer_store_dword v15, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:108,  // store D
+
+
+buffer_store_dword v16, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v17, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:260,  // store D
+buffer_store_dword v18, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:264,  // store D
+buffer_store_dword v19, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:268,  // store D
+
+buffer_store_dword v20, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:288,  // store D
+buffer_store_dword v21, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:292,  // store D
+buffer_store_dword v22, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:296,  // store D
+buffer_store_dword v23, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:300,  // store D
+
+buffer_store_dword v24, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v25, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:324,  // store D
+buffer_store_dword v26, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:328,  // store D
+buffer_store_dword v27, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:332,  // store D
+
+buffer_store_dword v28, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:352,  // store D
+buffer_store_dword v29, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:356,  // store D
+buffer_store_dword v30, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:360,  // store D
+buffer_store_dword v31, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:364,  // store D
+
+s_mul_i32 s56, s[sgprStridesD+0], 256               // scale StrideD *= 16 * bpe
 s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v8, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v9, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v10, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v11, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v12, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v13, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v14, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v15, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v16, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v17, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v18, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v19, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v20, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v21, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v22, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v23, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v24, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v25, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v26, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v27, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v28, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v29, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v30, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v31, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
+
 buffer_store_dword v32, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v33, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v34, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v35, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v36, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v37, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v38, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v39, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v40, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v41, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v42, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v43, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v44, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v45, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v46, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v47, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v48, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v49, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v50, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v51, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v52, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v53, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v54, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v55, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v56, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
-buffer_store_dword v57, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
-buffer_store_dword v58, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
-buffer_store_dword v59, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
-buffer_store_dword v60, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
-buffer_store_dword v61, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
-buffer_store_dword v62, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
-buffer_store_dword v63, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v33, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
+buffer_store_dword v34, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
+buffer_store_dword v35, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
+
+buffer_store_dword v36, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
+buffer_store_dword v37, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:36,  // store D
+buffer_store_dword v38, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:40,  // store D
+buffer_store_dword v39, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:44,  // store D
+
+buffer_store_dword v40, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v41, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:68,  // store D
+buffer_store_dword v42, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:72,  // store D
+buffer_store_dword v43, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:76,  // store D
+
+buffer_store_dword v44, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
+buffer_store_dword v45, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:100,  // store D
+buffer_store_dword v46, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:104,  // store D
+buffer_store_dword v47, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:108,  // store D
+
+buffer_store_dword v48, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v49, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:260,  // store D
+buffer_store_dword v50, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:264,  // store D
+buffer_store_dword v51, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:268,  // store D
+buffer_store_dword v52, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:288,  // store D
+buffer_store_dword v53, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:292,  // store D
+buffer_store_dword v54, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:296,  // store D
+buffer_store_dword v55, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:300,  // store D
+
+buffer_store_dword v56, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v57, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:324,  // store D
+buffer_store_dword v58, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:328,  // store D
+buffer_store_dword v59, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:332,  // store D
+
+buffer_store_dword v60, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:352,  // store D
+buffer_store_dword v61, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:356,  // store D
+buffer_store_dword v62, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:360,  // store D
+buffer_store_dword v63, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:364,  // store D
+
 s_branch label_0025                                // jump to end
 GW_B0_E1_17:
 
@@ -1525,105 +1600,98 @@ s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v69, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(0,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
 _v_add_lshl_u32 v70, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v70, -1, v70, s[64:65]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(0,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v71, -1, v71, s[66:67]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(0,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
 _v_add_lshl_u32 v72, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v72, -1, v72, s[68:69]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(0,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
 _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v73, -1, v73, s[70:71]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(0,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 9                     // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
 _v_add_lshl_u32 v74, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v74, -1, v74, s[72:73]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(0,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 10                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
 _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v75, -1, v75, s[74:75]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(0,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 11                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[76:77], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[76:77], s[56:57], s[76:77]             // in0 && in1
 _v_add_lshl_u32 v76, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v76, -1, v76, s[76:77]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(1,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[78:79], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[78:79], s[56:57], s[78:79]             // in0 && in1
-_v_add_lshl_u32 v77, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v77, -1, v77, s[78:79]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(1,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 17                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[80:81], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[80:81], s[56:57], s[80:81]             // in0 && in1
 _v_add_lshl_u32 v78, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v78, -1, v78, s[80:81]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(1,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 18                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[82:83], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[82:83], s[56:57], s[82:83]             // in0 && in1
 _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v79, -1, v79, s[82:83]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(1,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 19                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[84:85], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[84:85], s[56:57], s[84:85]             // in0 && in1
 _v_add_lshl_u32 v80, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v80, -1, v80, s[84:85]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(1,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[86:87], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[86:87], s[56:57], s[86:87]             // in0 && in1
 _v_add_lshl_u32 v81, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v81, -1, v81, s[86:87]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(1,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 25                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[88:89], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[88:89], s[56:57], s[88:89]             // in0 && in1
 _v_add_lshl_u32 v82, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v82, -1, v82, s[88:89]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(1,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 26                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[90:91], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[90:91], s[56:57], s[90:91]             // in0 && in1
@@ -1672,52 +1740,54 @@ buffer_store_dword v14, v83, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(1,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 27                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+s_mov_b32 s56, 64
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
-_v_add_lshl_u32 v70, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v70, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v70, -1, v70, s[64:65]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 65
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v71, -1, v71, s[66:67]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 66
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
 _v_add_lshl_u32 v72, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v72, -1, v72, s[68:69]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 67
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
 _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v73, -1, v73, s[70:71]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 72
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
 _v_add_lshl_u32 v74, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v74, -1, v74, s[72:73]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 73
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -1725,7 +1795,7 @@ s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
 _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v75, -1, v75, s[74:75]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 74
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[76:77], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -1733,52 +1803,55 @@ s_and_b64 s[76:77], s[56:57], s[76:77]             // in0 && in1
 _v_add_lshl_u32 v76, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v76, -1, v76, s[76:77]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(2,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 75
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[78:79], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[78:79], s[56:57], s[78:79]             // in0 && in1
 _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v77, -1, v77, s[78:79]               // clip if OOB. offset
+s_mov_b32 s56, 80
 /* (d1,vc1,d0,vc0)=(3,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[80:81], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[80:81], s[56:57], s[80:81]             // in0 && in1
-_v_add_lshl_u32 v78, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v78, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v78, -1, v78, s[80:81]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(3,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 81
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[82:83], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[82:83], s[56:57], s[82:83]             // in0 && in1
 _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v79, -1, v79, s[82:83]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(3,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 82
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[84:85], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[84:85], s[56:57], s[84:85]             // in0 && in1
 _v_add_lshl_u32 v80, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v80, -1, v80, s[84:85]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(3,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 83
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[86:87], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[86:87], s[56:57], s[86:87]             // in0 && in1
 _v_add_lshl_u32 v81, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v81, -1, v81, s[86:87]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(3,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 88
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[88:89], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[88:89], s[56:57], s[88:89]             // in0 && in1
 _v_add_lshl_u32 v82, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v82, -1, v82, s[88:89]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(3,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 89
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[90:91], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -1828,7 +1901,7 @@ buffer_store_dword v29, v83, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(3,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 90
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -1836,16 +1909,17 @@ s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(3,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 91
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
 _v_add_lshl_u32 v70, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v70, -1, v70, s[64:65]               // clip if OOB. offset
+
 /* (d1,vc1,d0,vc0)=(4,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
+_v_add_co_u32 v65, vcc, v65, 64                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
+s_mul_i32 s56, s[sgprStridesC+0], 64               // scale stride
 _v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
 v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -1853,89 +1927,84 @@ s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v71, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v71, -1, v71, s[66:67]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(4,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
 _v_add_lshl_u32 v72, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v72, -1, v72, s[68:69]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(4,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
 _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v73, -1, v73, s[70:71]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(4,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
 _v_add_lshl_u32 v74, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v74, -1, v74, s[72:73]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(4,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 8                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
 _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v75, -1, v75, s[74:75]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(4,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 9                     // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[76:77], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[76:77], s[56:57], s[76:77]             // in0 && in1
 _v_add_lshl_u32 v76, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v76, -1, v76, s[76:77]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(4,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 10                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[78:79], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[78:79], s[56:57], s[78:79]             // in0 && in1
 _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v77, -1, v77, s[78:79]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(4,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 11                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[80:81], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[80:81], s[56:57], s[80:81]             // in0 && in1
 _v_add_lshl_u32 v78, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v78, -1, v78, s[80:81]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(5,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+_v_add_co_u32 v67, vcc, v64, 16                    // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[82:83], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[82:83], s[56:57], s[82:83]             // in0 && in1
-_v_add_lshl_u32 v79, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v79, -1, v79, s[82:83]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(5,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 17                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[84:85], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[84:85], s[56:57], s[84:85]             // in0 && in1
 _v_add_lshl_u32 v80, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v80, -1, v80, s[84:85]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(5,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 18                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[86:87], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[86:87], s[56:57], s[86:87]             // in0 && in1
 _v_add_lshl_u32 v81, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v81, -1, v81, s[86:87]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(5,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 19                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[88:89], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[88:89], s[56:57], s[88:89]             // in0 && in1
 _v_add_lshl_u32 v82, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v82, -1, v82, s[88:89]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(5,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[90:91], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[90:91], s[56:57], s[90:91]             // in0 && in1
@@ -1984,68 +2053,68 @@ buffer_store_dword v44, v83, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(5,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 25                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(5,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 26                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
 _v_add_lshl_u32 v70, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v70, -1, v70, s[64:65]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(5,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 27                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v71, -1, v71, s[66:67]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+s_mov_b32 s56, 64
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
-_v_add_lshl_u32 v72, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v72, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v72, -1, v72, s[68:69]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 65
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
 _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v73, -1, v73, s[70:71]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 66
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
 _v_add_lshl_u32 v74, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v74, -1, v74, s[72:73]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 67
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
 _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v75, -1, v75, s[74:75]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 72
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[76:77], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[76:77], s[56:57], s[76:77]             // in0 && in1
 _v_add_lshl_u32 v76, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v76, -1, v76, s[76:77]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 73
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[78:79], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -2053,7 +2122,7 @@ s_and_b64 s[78:79], s[56:57], s[78:79]             // in0 && in1
 _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v77, -1, v77, s[78:79]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 74
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[80:81], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -2061,7 +2130,7 @@ s_and_b64 s[80:81], s[56:57], s[80:81]             // in0 && in1
 _v_add_lshl_u32 v78, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v78, -1, v78, s[80:81]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(6,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 75
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[82:83], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -2069,30 +2138,32 @@ s_and_b64 s[82:83], s[56:57], s[82:83]             // in0 && in1
 _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v79, -1, v79, s[82:83]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(7,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+s_mov_b32 s56, 80
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[84:85], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[84:85], s[56:57], s[84:85]             // in0 && in1
-_v_add_lshl_u32 v80, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v80, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v80, -1, v80, s[84:85]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(7,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 81
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[86:87], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[86:87], s[56:57], s[86:87]             // in0 && in1
 _v_add_lshl_u32 v81, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v81, -1, v81, s[86:87]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(7,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 82
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[88:89], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[88:89], s[56:57], s[88:89]             // in0 && in1
 _v_add_lshl_u32 v82, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v82, -1, v82, s[88:89]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(7,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 83
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[90:91], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[90:91], s[56:57], s[90:91]             // in0 && in1
@@ -2141,14 +2212,15 @@ buffer_store_dword v59, v83, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(7,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 88
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
 _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(7,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 89
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -2156,7 +2228,7 @@ s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
 _v_add_lshl_u32 v70, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v70, -1, v70, s[64:65]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(7,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 90
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -2164,7 +2236,7 @@ s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
 _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v71, -1, v71, s[66:67]               // clip if OOB. offset
 /* (d1,vc1,d0,vc0)=(7,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 91
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -2213,34 +2285,31 @@ GW_B1_E0_21:
 _v_add_lshl_u32 v69, v66, v64, 0x2                 // optSingleColVgpr scaleToBpe: sharedAddrVgpr <- cinRowPtr + coord0, scaled by BPE
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,1,0) */
-buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:4 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,2,0) */
-buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:8 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,3,0) */
-buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:12 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,4,0) */
-buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:32 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,5,0) */
-buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:36 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,6,0) */
-buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:40 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,7,0) */
-buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:44 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 64               // scale StrideC *= 16 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,1,0) */
-buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:68 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,2,0) */
-buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:72 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,3,0) */
-buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:76 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,4,0) */
-buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:96 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,5,0) */
-buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:100 // load C for beta calc
 
 /* rC *= alpha batchEements=[(0, 0, 0, 0), (0, 1, 0, 0), (0, 2, 0, 0), (0, 3, 0, 0), (0, 4, 0, 0), (0, 5, 0, 0), (0, 6, 0, 0), (0, 7, 0, 0), (1, 0, 0, 0), (1, 1, 0, 0), (1, 2, 0, 0), (1, 3, 0, 0), (1, 4, 0, 0), (1, 5, 0, 0)] */
 v_mul_f32 v[vgprValuC+0], s[sgprAlpha], v[vgprValuC+0] // *= alpha
@@ -2266,58 +2335,55 @@ buffer_store_dword v0, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // stor
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+1], v71, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v1, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v1, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+2], v72, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v2, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v2, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+3], v73, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v3, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v3, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+4], v74, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v4, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v4, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+5], v75, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v5, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v5, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:36,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+6], v76, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v6, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v6, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:40,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+7], v77, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v7, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v7, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:44,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+8], v78, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v8, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v8, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+9], v79, s[sgprBeta]         // finalSum = sum*alpha + C*beta
-buffer_store_dword v9, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v9, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:68,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+10], v80, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v10, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v10, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:72,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+11], v81, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v11, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v11, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:76,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+12], v82, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v12, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v12, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+13], v83, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v13, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v13, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:100,  // store D
 /* optSingleColVgpr=1 optSharedColVgpr=0 optSharedMask=1 optSrdIncForRow=1 */
 
 /******************************************/
@@ -2327,39 +2393,33 @@ buffer_store_dword v13, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // s
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(1,0,6,0) */
-buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:104 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,7,0) */
-buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:108 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 64               // scale StrideC *= 16 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,1,0) */
-buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:260 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,2,0) */
-buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:264 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,3,0) */
-buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:268 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,4,0) */
-buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:288 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,5,0) */
-buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:292 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,6,0) */
-buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:296 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,7,0) */
-buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:300 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 64               // scale StrideC *= 16 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,1,0) */
-buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:324 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,2,0) */
-buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:328 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,3,0) */
-buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:332 // load C for beta calc
 
 /* rC *= alpha batchEements=[(1, 6, 0, 0), (1, 7, 0, 0), (2, 0, 0, 0), (2, 1, 0, 0), (2, 2, 0, 0), (2, 3, 0, 0), (2, 4, 0, 0), (2, 5, 0, 0), (2, 6, 0, 0), (2, 7, 0, 0), (3, 0, 0, 0), (3, 1, 0, 0), (3, 2, 0, 0), (3, 3, 0, 0)] */
 v_mul_f32 v[vgprValuC+14], s[sgprAlpha], v[vgprValuC+14] // *= alpha
@@ -2381,65 +2441,59 @@ v_mul_f32 v[vgprValuC+27], s[sgprAlpha], v[vgprValuC+27] // *= alpha
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+14], v70, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v14, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v14, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:104,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+15], v71, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v15, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v15, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:108,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+16], v72, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v16, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v16, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+17], v73, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v17, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v17, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:260,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+18], v74, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v18, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v18, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:264,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+19], v75, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v19, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v19, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:268,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+20], v76, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v20, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v20, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:288,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+21], v77, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v21, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v21, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:292,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+22], v78, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v22, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v22, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:296,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+23], v79, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v23, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v23, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:300,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+24], v80, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v24, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v24, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+25], v81, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v25, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v25, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:324,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+26], v82, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v26, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v26, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:328,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+27], v83, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v27, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v27, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:332,  // store D
 /* optSingleColVgpr=1 optSharedColVgpr=0 optSharedMask=1 optSrdIncForRow=1 */
 
 /******************************************/
@@ -2449,39 +2503,40 @@ buffer_store_dword v27, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // s
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(3,0,4,0) */
-buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:352 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,5,0) */
-buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:356 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,6,0) */
-buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:360 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,7,0) */
-buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:364 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 64               // scale StrideC *= 16 * bpe
+
+s_mul_i32 s56, s[sgprStridesC+0], 256               // scale StrideC *= 16 * bpe
 s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
+
 buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,1,0) */
-buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:4 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,2,0) */
-buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:8 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,3,0) */
-buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:12 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,4,0) */
-buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:32 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,5,0) */
-buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:36 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,6,0) */
-buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:40 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,7,0) */
-buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:44 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 64               // scale StrideC *= 16 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,1,0) */
-buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:68 // load C for beta calc
+
+s_waitcnt vmcnt(0)
 
 /* rC *= alpha batchEements=[(3, 4, 0, 0), (3, 5, 0, 0), (3, 6, 0, 0), (3, 7, 0, 0), (4, 0, 0, 0), (4, 1, 0, 0), (4, 2, 0, 0), (4, 3, 0, 0), (4, 4, 0, 0), (4, 5, 0, 0), (4, 6, 0, 0), (4, 7, 0, 0), (5, 0, 0, 0), (5, 1, 0, 0)] */
 v_mul_f32 v[vgprValuC+28], s[sgprAlpha], v[vgprValuC+28] // *= alpha
@@ -2503,65 +2558,62 @@ v_mul_f32 v[vgprValuC+41], s[sgprAlpha], v[vgprValuC+41] // *= alpha
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+28], v70, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v28, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v28, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:352,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+29], v71, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v29, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v29, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:356,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+30], v72, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v30, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v30, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:360,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+31], v73, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v31, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v31, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:364,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+32], v74, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
+s_mul_i32 s56, s[sgprStridesD+0], 256               // scale StrideD *= 16 * bpe
 s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
 s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
 buffer_store_dword v32, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+33], v75, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v33, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v33, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:4,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+34], v76, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v34, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v34, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:8,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+35], v77, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v35, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v35, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:12,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+36], v78, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v36, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v36, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:32,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+37], v79, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v37, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v37, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:36,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+38], v80, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v38, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v38, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:40,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+39], v81, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v39, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v39, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:44,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+40], v82, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v40, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v40, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+41], v83, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v41, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v41, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:68,  // store D
 /* optSingleColVgpr=1 optSharedColVgpr=0 optSharedMask=1 optSrdIncForRow=1 */
 
 /******************************************/
@@ -2571,36 +2623,33 @@ buffer_store_dword v41, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // st
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(5,0,2,0) */
-buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:72 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,3,0) */
-buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:76 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,4,0) */
-buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:96 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,5,0) */
-buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:100 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,6,0) */
-buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:104 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,7,0) */
-buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:108 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 64               // scale StrideC *= 16 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,1,0) */
-buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:260 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,2,0) */
-buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v78, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:264 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,3,0) */
-buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v79, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:268 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,4,0) */
-buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v80, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:288 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,5,0) */
-buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v81, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:292 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,6,0) */
-buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v82, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:296 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,7,0) */
-buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v83, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:300 // load C for beta calc
 
 /* rC *= alpha batchEements=[(5, 2, 0, 0), (5, 3, 0, 0), (5, 4, 0, 0), (5, 5, 0, 0), (5, 6, 0, 0), (5, 7, 0, 0), (6, 0, 0, 0), (6, 1, 0, 0), (6, 2, 0, 0), (6, 3, 0, 0), (6, 4, 0, 0), (6, 5, 0, 0), (6, 6, 0, 0), (6, 7, 0, 0)] */
 v_mul_f32 v[vgprValuC+42], s[sgprAlpha], v[vgprValuC+42] // *= alpha
@@ -2622,62 +2671,59 @@ v_mul_f32 v[vgprValuC+55], s[sgprAlpha], v[vgprValuC+55] // *= alpha
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+42], v70, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v42, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v42, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:72,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+43], v71, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v43, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v43, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:76,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+44], v72, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v44, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v44, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:96,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+45], v73, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v45, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v45, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:100,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+46], v74, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v46, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v46, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:104,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+47], v75, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v47, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v47, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:108,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+48], v76, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v48, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v48, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+49], v77, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v49, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v49, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:260,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+50], v78, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v50, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v50, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:264,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+51], v79, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v51, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v51, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:268,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+52], v80, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v52, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v52, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:288,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+53], v81, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v53, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v53, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:292,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+54], v82, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v54, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v54, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:296,  // store D
 
 s_waitcnt vmcnt(13)                                // wait C (interleaved)
 v_mac_f32 v[vgprValuC+55], v83, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v55, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v55, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:300,  // store D
 /* optSingleColVgpr=1 optSharedColVgpr=0 optSharedMask=1 optSrdIncForRow=1 */
 
 /******************************************/
@@ -2687,24 +2733,21 @@ buffer_store_dword v55, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // s
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(7,0,0,0) */
-s_mul_i32 s56, s[sgprStridesC+0], 64               // scale StrideC *= 16 * bpe
-s_add_u32  s[sgprSrdC+0], s[sgprSrdC+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdC+1], s[sgprSrdC+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
+buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,1,0) */
-buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:64 // load C for beta calc
+buffer_load_dword v71, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:324 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,2,0) */
-buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:128 // load C for beta calc
+buffer_load_dword v72, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:328 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,3,0) */
-buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:192 // load C for beta calc
+buffer_load_dword v73, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:332 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,4,0) */
-buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:256 // load C for beta calc
+buffer_load_dword v74, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:352 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,5,0) */
-buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:320 // load C for beta calc
+buffer_load_dword v75, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:356 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,6,0) */
-buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:384 // load C for beta calc
+buffer_load_dword v76, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:360 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,7,0) */
-buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:448 // load C for beta calc
+buffer_load_dword v77, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:364 // load C for beta calc
 
 /* rC *= alpha batchEements=[(7, 0, 0, 0), (7, 1, 0, 0), (7, 2, 0, 0), (7, 3, 0, 0), (7, 4, 0, 0), (7, 5, 0, 0), (7, 6, 0, 0), (7, 7, 0, 0)] */
 v_mul_f32 v[vgprValuC+56], s[sgprAlpha], v[vgprValuC+56] // *= alpha
@@ -2720,38 +2763,35 @@ v_mul_f32 v[vgprValuC+63], s[sgprAlpha], v[vgprValuC+63] // *= alpha
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+56], v70, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-s_mul_i32 s56, s[sgprStridesD+0], 64               // scale StrideD *= 16 * bpe
-s_add_u32  s[sgprSrdD+0], s[sgprSrdD+0], s56       // incToNextRow: gra SRD += inc(lower)
-s_addc_u32  s[sgprSrdD+1], s[sgprSrdD+1], 0        // incToNextRow: gra SRD += inc(upper)
-buffer_store_dword v56, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // store D
+buffer_store_dword v56, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+57], v71, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v57, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:64,  // store D
+buffer_store_dword v57, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:324,  // store D
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+58], v72, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v58, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:128,  // store D
+buffer_store_dword v58, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:328,  // store D
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+59], v73, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v59, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:192,  // store D
+buffer_store_dword v59, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:332,  // store D
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+60], v74, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v60, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:256,  // store D
+buffer_store_dword v60, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:352,  // store D
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+61], v75, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v61, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:320,  // store D
+buffer_store_dword v61, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:356,  // store D
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+62], v76, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v62, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:384,  // store D
+buffer_store_dword v62, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:360,  // store D
 
 s_waitcnt vmcnt(7)                                 // wait C (interleaved)
 v_mac_f32 v[vgprValuC+63], v77, s[sgprBeta]        // finalSum = sum*alpha + C*beta
-buffer_store_dword v63, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:448,  // store D
+buffer_store_dword v63, v69, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:364,  // store D
 s_branch label_0025                                // jump to end
 GW_B1_E1_24:
 
@@ -2772,7 +2812,7 @@ _v_add_lshl_u32 v69, v66, v64, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
@@ -2780,7 +2820,7 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
@@ -2788,7 +2828,7 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
@@ -2796,7 +2836,7 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
@@ -2804,8 +2844,7 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 9                     // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
@@ -2813,8 +2852,7 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(0,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 10                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -2856,8 +2894,7 @@ buffer_store_dword v6, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // stor
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(0,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 11                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
@@ -2865,17 +2902,15 @@ _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+_v_add_co_u32 v67, vcc, v64, 16                    // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
-_v_add_lshl_u32 v71, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 17                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
@@ -2883,7 +2918,7 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 18                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
@@ -2891,7 +2926,7 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 19                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
@@ -2899,7 +2934,7 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
@@ -2907,8 +2942,7 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 25                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -2950,8 +2984,7 @@ buffer_store_dword v13, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(1,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 26                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
@@ -2959,8 +2992,7 @@ _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(1,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 27                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
@@ -2968,17 +3000,17 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+s_mov_b32 s56, 64
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
-_v_add_lshl_u32 v73, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 65
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
@@ -2986,7 +3018,8 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 66
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
@@ -2994,7 +3027,8 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 67
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
@@ -3002,7 +3036,8 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 72
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -3044,7 +3079,7 @@ buffer_store_dword v20, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(2,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 73                                  // coordOffset0 d0=5 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3053,7 +3088,7 @@ _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 74                                  // coordOffset0 d0=6 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3062,7 +3097,7 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(2,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 75                                  // coordOffset0 d0=7 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3071,17 +3106,17 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+s_mov_b32 s56, 80                                  // coordOffset0 d0=7 vc0=0
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
-_v_add_lshl_u32 v75, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 81                                  // coordOffset0 d0=7 vc0=0
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
@@ -3089,7 +3124,8 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 82                                  // coordOffset0 d0=7 vc0=0
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
@@ -3097,7 +3133,8 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 83                                  // coordOffset0 d0=7 vc0=0
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -3139,7 +3176,8 @@ buffer_store_dword v27, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(3,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 88                                  // coordOffset0 d0=5 vc0=0
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
@@ -3147,7 +3185,7 @@ _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 89                                  // coordOffset0 d0=5 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3156,7 +3194,7 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 90                                  // coordOffset0 d0=6 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3165,7 +3203,7 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(3,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 91                                  // coordOffset0 d0=7 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3174,8 +3212,8 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
+_v_add_co_u32 v65, vcc, v65, 64                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
+s_mul_i32 s56, s[sgprStridesC+0], 64               // scale stride
 _v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
 v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3184,7 +3222,7 @@ _v_add_lshl_u32 v77, v66, v64, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 1                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
@@ -3192,7 +3230,7 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 2                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -3234,7 +3272,7 @@ buffer_store_dword v34, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(4,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 3                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
@@ -3242,7 +3280,7 @@ _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 8                     // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
@@ -3250,8 +3288,7 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 9                     // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
@@ -3259,8 +3296,7 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 10                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
@@ -3268,8 +3304,7 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(4,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 11                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
@@ -3277,17 +3312,15 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+_v_add_co_u32 v67, vcc, v64, 16                    // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
-_v_add_lshl_u32 v79, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 17                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
@@ -3329,7 +3362,7 @@ buffer_store_dword v41, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(5,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 18                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
@@ -3337,7 +3370,7 @@ _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 19                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
@@ -3345,7 +3378,7 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 24                    // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
@@ -3353,8 +3386,7 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 25                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
@@ -3362,8 +3394,7 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 26                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
@@ -3371,8 +3402,7 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(5,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
-_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+_v_add_co_u32 v67, vcc, v64, 27                    // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[72:73], s[56:57], s[72:73]             // in0 && in1
@@ -3380,13 +3410,12 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+s_mov_b32 s56, 64
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[74:75], s[56:57], s[74:75]             // in0 && in1
-_v_add_lshl_u32 v81, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v81, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v81, -1, v81, s[74:75]               // clip if OOB. offset
 buffer_load_dword v82, v81, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 
@@ -3424,7 +3453,8 @@ buffer_store_dword v48, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(6,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 65
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
@@ -3432,7 +3462,8 @@ _v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 66
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
@@ -3440,7 +3471,8 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 67
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
@@ -3448,7 +3480,8 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 72
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
@@ -3456,7 +3489,7 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 73                                  // coordOffset0 d0=5 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3465,7 +3498,7 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 74                                  // coordOffset0 d0=6 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3474,7 +3507,7 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(6,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 75                                  // coordOffset0 d0=7 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3517,17 +3550,17 @@ buffer_store_dword v55, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(7,0,0,0) */
-_v_add_co_u32 v65, vcc, v65, 16                    // coord1.1: coord1Vgpr += d1*sg1*VW + vc1
-s_mul_i32 s56, s[sgprStridesC+0], 16               // scale stride
-_v_add_u32 v66, v66, s56                           // ROWINC- Move cinRowPtr to next row
-v_cmp_lt_u32 s[56:57], v64, s[sgprSizeC0I]         // coord0 < size0
+s_mov_b32 s56, 80
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
+v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[62:63], s[56:57], s[62:63]             // in0 && in1
-_v_add_lshl_u32 v69, v66, v64, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
+_v_add_lshl_u32 v69, v66, v67, 0x2                 // scaleToBpe: accumulate d0 lower and *= bpe into Cin addr
 v_cndmask_b32 v69, -1, v69, s[62:63]               // clip if OOB. offset
 buffer_load_dword v70, v69, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,1,0) */
-_v_add_co_u32 v67, vcc, v64, 16                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 81
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[64:65], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[64:65], s[56:57], s[64:65]             // in0 && in1
@@ -3535,7 +3568,8 @@ _v_add_lshl_u32 v71, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v71, -1, v71, s[64:65]               // clip if OOB. offset
 buffer_load_dword v72, v71, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,2,0) */
-_v_add_co_u32 v67, vcc, v64, 32                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 82
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[66:67], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[66:67], s[56:57], s[66:67]             // in0 && in1
@@ -3543,7 +3577,8 @@ _v_add_lshl_u32 v73, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v73, -1, v73, s[66:67]               // clip if OOB. offset
 buffer_load_dword v74, v73, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,3,0) */
-_v_add_co_u32 v67, vcc, v64, 48                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 83
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[68:69], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[68:69], s[56:57], s[68:69]             // in0 && in1
@@ -3551,7 +3586,8 @@ _v_add_lshl_u32 v75, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v75, -1, v75, s[68:69]               // clip if OOB. offset
 buffer_load_dword v76, v75, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,4,0) */
-_v_add_co_u32 v67, vcc, v64, 64                    // coord0.1: coord0 += d0*sg0*VW + vc0
+s_mov_b32 s56, 88
+_v_add_co_u32 v67, vcc, v64, s56                   // coord0.1: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[70:71], v65, s[sgprSizeC1J]         // coord1 < size1
 s_and_b64 s[70:71], s[56:57], s[70:71]             // in0 && in1
@@ -3559,7 +3595,7 @@ _v_add_lshl_u32 v77, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v77, -1, v77, s[70:71]               // clip if OOB. offset
 buffer_load_dword v78, v77, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,5,0) */
-s_mov_b32 s56, 80                                  // coordOffset0 d0=5 vc0=0
+s_mov_b32 s56, 89                                  // coordOffset0 d0=5 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[72:73], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3568,7 +3604,7 @@ _v_add_lshl_u32 v79, v66, v67, 0x2                 // scaleToBpe: accumulate d0 
 v_cndmask_b32 v79, -1, v79, s[72:73]               // clip if OOB. offset
 buffer_load_dword v80, v79, s[sgprSrdC:sgprSrdC+3], 0, offen offset:0 // load C for beta calc
 /* (d1,vc1,d0,vc0)=(7,0,6,0) */
-s_mov_b32 s56, 96                                  // coordOffset0 d0=6 vc0=0
+s_mov_b32 s56, 90                                  // coordOffset0 d0=6 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[74:75], v65, s[sgprSizeC1J]         // coord1 < size1
@@ -3611,7 +3647,7 @@ buffer_store_dword v62, v81, s[sgprSrdD:sgprSrdD+3], 0, offen, offset:0,  // sto
 
 /* calc coords, apply mask, and issue loads (if necessary) */
 /* (d1,vc1,d0,vc0)=(7,0,7,0) */
-s_mov_b32 s56, 112                                 // coordOffset0 d0=7 vc0=0
+s_mov_b32 s56, 91                                  // coordOffset0 d0=7 vc0=0
 _v_add_co_u32 v67, vcc, v64, s56                   // coord0.2: coord0 += d0*sg0*VW + vc0
 v_cmp_lt_u32 s[56:57], v67, s[sgprSizeC0I]         // coord0 < size0
 v_cmp_lt_u32 s[62:63], v65, s[sgprSizeC1J]         // coord1 < size1
