@@ -1,0 +1,4 @@
+cp Cijk_Alik_Bljk_BBH_MT64x128x32_SE_K1.sp3.c Cijk_Alik_Bljk_BBH_MT64x128x32_SE_K1.sp3
+./sp3_asm.sh Cijk_Alik_Bljk_BBH_MT64x128x32_SE_K1
+cp Cijk_Alik_Bljk_BBH_MT64x128x32_SE_K1.inc /home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/1_BenchmarkProblems/Cijk_Alik_Bljk_BBH_00/00_Final/source/assembly
+
