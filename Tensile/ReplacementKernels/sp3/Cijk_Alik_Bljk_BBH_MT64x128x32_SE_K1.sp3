@@ -553,16 +553,19 @@ wave0_entry_start:
  
   //32 lanes for holding M elements
   v_and_b32        v1, v[vgprSerial+1],  0x1f
-  v_mul_lo_u32     v[vgprLocalReadAddrA+0],  16, v1
-  v_lshrrev_b32    v1, 2, v1
-  v_mul_lo_u32     v1, varlds_pad_qw, v1
-  v_add_u32        v[vgprLocalReadAddrA+0],  v1,  v[vgprLocalReadAddrA+0]
+  v_mul_lo_u32     v[vgprLocalReadAddrA+0],  32, v1
+  v_lshrrev_b32    v2, 2, v1
+  v_mul_lo_u32     v2, varlds_pad, v2
 
 /* local read addresses: final offsets a */
 
   v_lshrrev_b32    v1, 5,  v[vgprSerial+1]
+  v_lshlrev_b32    v1, 1, v1
   v_add_u32        v[vgprLocalReadAddrA+0], v1, v[vgprLocalReadAddrA+0]
-  v_lshlrev_b32    v[vgprLocalReadAddrA+0], 2, v[vgprLocalReadAddrA+0]  //convert to bytes
+  v_lshlrev_b32    v[vgprLocalReadAddrA+0], 1, v[vgprLocalReadAddrA+0]  //convert to bytes
+
+  v_add_u32        v[vgprLocalReadAddrA+0], v2,  v[vgprLocalReadAddrA+0]
+
   v_add_u32        v[vgprLocalReadAddrA+0], varA_lds_base_addr,  v[vgprLocalReadAddrA+0]
   v_add_u32        v[vgprLocalReadAddrA+1], varlds_Asize_per_wg, v[vgprLocalReadAddrA+0]
 
@@ -574,16 +577,18 @@ wave0_entry_start:
 
   //32 lanes for holding N elements
   v_and_b32        v1,  v[vgprSerial+1],     0x1f
-  v_mul_lo_u32     v[vgprLocalReadAddrB+0],  16, v1
-  v_lshrrev_b32    v1,  2,  v1
-  v_mul_lo_u32     v1, varlds_pad_qw, v1
-  v_add_u32        v[vgprLocalReadAddrB+0],  v1,  v[vgprLocalReadAddrB+0]
+  v_mul_lo_u32     v[vgprLocalReadAddrB+0],  32, v1
+  v_lshrrev_b32    v2,  2,  v1
+  v_mul_lo_u32     v2, varlds_pad, v2
 
 /* local read addresses: final offsets b */
 
   v_lshrrev_b32    v1,                  5,      v[vgprSerial+1]
+  v_lshlrev_b32    v1, 1, v1
   v_add_u32        v[vgprLocalReadAddrB+0],  v1, v[vgprLocalReadAddrB+0]
-  v_lshlrev_b32    v[vgprLocalReadAddrB+0],  2, v[vgprLocalReadAddrB+0]  //convert to bytes
+  v_lshlrev_b32    v[vgprLocalReadAddrB+0],  1, v[vgprLocalReadAddrB+0]  //convert to bytes
+
+  v_add_u32        v[vgprLocalReadAddrB+0],  v2,  v[vgprLocalReadAddrB+0]
 
   s_mul_i32        s84,  s[sgprFetchSubGrpId],    varlds_Bsize_per_wave
   v_add_u32        v[vgprLocalReadAddrB+0], s84, v[vgprLocalReadAddrB+0]
