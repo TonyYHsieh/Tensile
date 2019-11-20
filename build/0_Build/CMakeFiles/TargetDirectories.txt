@@ -1,0 +1,10 @@
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/CMakeFiles/edit_cache.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/CMakeFiles/rebuild_cache.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/lib/CMakeFiles/edit_cache.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/lib/CMakeFiles/TensileHost.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/lib/CMakeFiles/rebuild_cache.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/lib/CMakeFiles/intrinsics_gen.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/client/CMakeFiles/rebuild_cache.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/client/CMakeFiles/edit_cache.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/client/CMakeFiles/tensile_client.dir
+/home/tonyh/Source/Tensile/3_mfma_bf16/Tensile/build/0_Build/client/CMakeFiles/TensileClient.dir
