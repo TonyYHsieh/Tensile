@@ -7764,8 +7764,10 @@ class KernelWriterAssembly(KernelWriter):
     # and reduce the boundary checks accordingly.  But if no AF0EM guarantee
     # then use a conservative 1
     edgeVw = kernel["VectorWidth"] if kernel["VectorStore"] else 1
+    edgeVw = 1 if kernel["ProblemType"]["DataType"].isBFloat16() else edgeVw
     edgeVw = min(edgeVw, self.maxGwvw(kernel), kernel["AssertFree0ElementMultiple"])
     assert(kernel["VectorWidth"]%edgeVw == 0)
+
     #if kernel["MatrixInstruction"]:
       ##TODO remove and use VectorWidth once VW mapping of TT is done
       #elementsLoadedPeredgeVw = kernel["NumThreads"]*edgeVw
@@ -8064,14 +8066,8 @@ class KernelWriterAssembly(KernelWriter):
 
         if self.cfg.numVgprsPerDataPerVI > 0:
           if self.cfg.halfDataRegPerVI:
-            if elementIdx%2 == 0:
-              # allocate for two elements:
-              data = kw.vgprPool.checkOut(int(2*self.cfg.numVgprsPerDataPerVI*self.cfg.gwvw), \
-                      "writeBatch-data for ei=%u and ei=%u"%(elementIdx,elementIdx+1), preventOverflow=True)
-              lastData = data
-            else:
-              data = lastData
-              del lastData
+            data = kw.vgprPool.checkOut(int(2*self.cfg.numVgprsPerDataPerVI*self.cfg.gwvw), \
+                  "writeBatch-data for ei=%u and ei=%u"%(elementIdx,elementIdx+1), preventOverflow=True)
           else:
             data = kw.vgprPool.checkOut(int(self.cfg.numVgprsPerDataPerVI*self.cfg.gwvw), \
                   "writeBatch-data for ei=%u"%elementIdx, preventOverflow=False)
@@ -9182,12 +9178,13 @@ class KernelWriterAssembly(KernelWriter):
 
           #if not kernel["LdcEqualsLdd"]:
           #  kStr += addrCalc.incrementToNextRow(kernel, "D", ss.optSrdIncForRow, tmpS01)
-        if kernel["ProblemType"]["DataType"].isHalf() or kernel["ProblemType"]["DataType"].isBFloat16():
+        if kernel["ProblemType"]["DataType"].isHalf():
           kStr += self.chooseGlobalRead(useBuffer, bps, data, \
                     addr0, addr1, soffset=0, offset=addrCalc.globalOffset, \
                     extraFields=extraFields, hi16=sumIdx%2,
                     comment="load C for beta calc").toStr()
-        elif kernel["ProblemType"]["DataType"].isInt8x4() or \
+        elif kernel["ProblemType"]["DataType"].isBFloat16() or \
+             kernel["ProblemType"]["DataType"].isInt8x4() or \
              kernel["ProblemType"]["DataType"].isSingle() or \
              kernel["ProblemType"]["DataType"].isDouble() or \
              kernel["ProblemType"]["DataType"].isSingleComplex() or \
@@ -9523,7 +9520,7 @@ class KernelWriterAssembly(KernelWriter):
                 # src2 = sumIdxV = f32 = opsel 00
                 tmpVgpr = self.vgprPool.checkOut(1)
                 dataCExternal = ss.elementData[elementIdx] + vi//2
-                if (sumIdxV%2) == 1:
+                if (vi%2) == 1:
                   kStr += inst("v_and_b32", vgpr(tmpVgpr), vgpr(dataCExternal), vgpr(vgpr_bfmask), "convert bf16 to fp32")
                 else:
                   kStr += inst("v_lshlrev_b32", vgpr(tmpVgpr), "16", vgpr(dataCExternal), "convert bf16 to fp32" )
@@ -9582,7 +9579,6 @@ class KernelWriterAssembly(KernelWriter):
 
           elif kernel["ProblemType"]["DataType"].isBFloat16():
             if kernel["ProblemType"]["HighPrecisionAccumulate"]:
-              assert (gwvw % 2 == 0)
               if vi%2 == 0:
                 kStr += inst("v_lshrrev_b32", vgpr("ValuC+%u"%sumIdxV), "16", vgpr("ValuC+%u"%sumIdxV), "convert C to bf16" )
               elif vi%2 == 1:
