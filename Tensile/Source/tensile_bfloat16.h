@@ -97,7 +97,7 @@ private:
             // When the bfloat16 value has an exponent of 0xFE and a mantissa of 0x7F,
             // incrementing it causes it to become an exponent of 0xFF and a mantissa
             // of 0x00, which is Inf, the next higher value to the unrounded value.
-            u.int32 += 0x7fff + ((u.int32 >> 16) & 1); // Round to nearest, round to even
+//            u.int32 += 0x7fff + ((u.int32 >> 16) & 1); // Round to nearest, round to even
         }
         else if(u.int32 & 0xffff)
         {
