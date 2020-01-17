@@ -1750,110 +1750,196 @@ v_accvgpr_read_b32 v[vgprValuC+63], acc63          // copy areg to vreg
 
 
 /* shift vector components d0 */
-
-v_mov_b32 v66, s[sgprWorkGroup0]                   // 
+v_mov_b32 v66, s[sgprWorkGroup0]                   //
 v_mul_i32_i24 v66, -0x40, v66                      // wg*MT
 _v_add_co_u32 v66, vcc, s[sgprSizesFree+0], v66    // wgMT = Size - wg*MT
 v_mov_b32 v64, 0x40                                // MT
 v_cmp_lt_u32 s[56:57], v66, v64                    // wgMT < MT
 v_cndmask_b32 v66, v64, v66, s[56:57]              // wgMT = (wgMT < MT) ? wgMT : MT
+
 v_lshrrev_b32 v68, 1, v66                          // vectorStaticDiv: v68 = v66 / 2
 v_and_b32 v69, 1, v66                              // vectorStaticDiv: v69 = v66 % 2
-v_lshrrev_b32 v70, 5, v68                          // vectorStaticDiv: v70 = v68 / 32
-v_and_b32 v71, 31, v68                             // vectorStaticDiv: v71 = v68 % 32
-v_and_b32 v72, 31, v[vgprSerial]                   // vectorStaticDiv: v72 = v[vgprSerial] % 32
-v_lshrrev_b32 v73, 6, v66                          // vectorStaticDiv: v73 = v66 / 64
-v_and_b32 v74, 1, v66                              // vectorStaticDiv: v74 = v66 % 2
-v_mov_b32 v75, v74                                 // duplicate
-v_lshrrev_b32 v74, 1, v75                          // vectorStaticDiv: v74 = v75 / 2
-_v_add_co_u32 v74, vcc, v73, v74                   // vId = 2 components
-v_cmp_eq_u32 s[56:57], v72, v71                    // mask
-v_mov_b32 v64, s56                                 // 
-v_mov_b32 v65, s57                                 // 
+
+v_lshrrev_b32 v71,  2, v66                         // v71 = wgMT / 4
+v_and_b32     v71,  1, v71                         // v71 = (wgMT / 4) % 2
+
+v_and_b32     v72, 63, v[vgprSerial]               // v72 = v[vgprSerial] % 64
+v_lshrrev_b32 v72,  5, v72                         // v72 = (v[vgprSerial] % 64) / 32
+
+v_and_b32     v73, 3, v66                          // v73 = wgMT % 4
+v_lshrrev_b32 v74, 3, v66                          // v74 = wgMT / 8
+
 v_cmp_eq_u32 vcc, v69, 0x1                         // wgMT%VW == 1
 s_cbranch_vccnz label_0014                         // shift d0 r=1
-s_branch label_0016                                // no shifting
+s_branch label_0016
 
-/******************************************/
-/* shift d0 r=1                           */
-/******************************************/
 label_0014:
 v_cmp_eq_u32 vcc, v74, 0x0                         // wgMT/(SG*VW) == 0
-s_cbranch_vccnz label_0015                         // shift d0, r=1, v=0
+s_cbranch_vccnz label_00150                        // shift d0, r=1, v=0
+v_cmp_eq_u32 vcc, v74, 0x1                         // wgMT/(SG*VW) == 0
+s_cbranch_vccnz label_00151                        // shift d0, r=1, v=0
+v_cmp_eq_u32 vcc, v74, 0x2                         // wgMT/(SG*VW) == 0
+s_cbranch_vccnz label_00152                        // shift d0, r=1, v=0
+v_cmp_eq_u32 vcc, v74, 0x3                         // wgMT/(SG*VW) == 0
+s_cbranch_vccnz label_00153                        // shift d0, r=1, v=0
+v_cmp_eq_u32 vcc, v74, 0x4                         // wgMT/(SG*VW) == 0
+s_cbranch_vccnz label_00154                        // shift d0, r=1, v=0
+v_cmp_eq_u32 vcc, v74, 0x5                         // wgMT/(SG*VW) == 0
+s_cbranch_vccnz label_00155                        // shift d0, r=1, v=0
+v_cmp_eq_u32 vcc, v74, 0x6                         // wgMT/(SG*VW) == 0
+s_cbranch_vccnz label_00156                        // shift d0, r=1, v=0
+v_cmp_eq_u32 vcc, v74, 0x7                         // wgMT/(SG*VW) == 0
+s_cbranch_vccnz label_00157                        // shift d0, r=1, v=0
 
-/* shift d0 r=1 v=0 */
-label_0015:
-v_cmpx_eq_u32 s[56:57], v72, v71                   // serial % SG == (wgMT/VECTOR_WIDTH)%SG
-// src=1, dst=0
-v_mov_b32 v0, v1                                   // rC[0+0*VW+0*TT0I] = rC[1+0*VW+0*TT0I]
-// src=3, dst=2
-v_mov_b32 v2, v3                                   // rC[0+0*VW+1*TT0I] = rC[1+0*VW+1*TT0I]
-// src=5, dst=4
-v_mov_b32 v4, v5                                   // rC[0+0*VW+2*TT0I] = rC[1+0*VW+2*TT0I]
-// src=7, dst=6
-v_mov_b32 v6, v7                                   // rC[0+0*VW+3*TT0I] = rC[1+0*VW+3*TT0I]
-// src=9, dst=8
-v_mov_b32 v8, v9                                   // rC[0+0*VW+4*TT0I] = rC[1+0*VW+4*TT0I]
-// src=11, dst=10
-v_mov_b32 v10, v11                                 // rC[0+0*VW+5*TT0I] = rC[1+0*VW+5*TT0I]
-// src=13, dst=12
-v_mov_b32 v12, v13                                 // rC[0+0*VW+6*TT0I] = rC[1+0*VW+6*TT0I]
-// src=15, dst=14
-v_mov_b32 v14, v15                                 // rC[0+0*VW+7*TT0I] = rC[1+0*VW+7*TT0I]
-// src=17, dst=16
-v_mov_b32 v16, v17                                 // rC[0+0*VW+8*TT0I] = rC[1+0*VW+8*TT0I]
-// src=19, dst=18
-v_mov_b32 v18, v19                                 // rC[0+0*VW+9*TT0I] = rC[1+0*VW+9*TT0I]
-// src=21, dst=20
-v_mov_b32 v20, v21                                 // rC[0+0*VW+10*TT0I] = rC[1+0*VW+10*TT0I]
-// src=23, dst=22
-v_mov_b32 v22, v23                                 // rC[0+0*VW+11*TT0I] = rC[1+0*VW+11*TT0I]
-// src=25, dst=24
-v_mov_b32 v24, v25                                 // rC[0+0*VW+12*TT0I] = rC[1+0*VW+12*TT0I]
-// src=27, dst=26
-v_mov_b32 v26, v27                                 // rC[0+0*VW+13*TT0I] = rC[1+0*VW+13*TT0I]
-// src=29, dst=28
-v_mov_b32 v28, v29                                 // rC[0+0*VW+14*TT0I] = rC[1+0*VW+14*TT0I]
-// src=31, dst=30
-v_mov_b32 v30, v31                                 // rC[0+0*VW+15*TT0I] = rC[1+0*VW+15*TT0I]
-// src=33, dst=32
-v_mov_b32 v32, v33                                 // rC[0+0*VW+16*TT0I] = rC[1+0*VW+16*TT0I]
-// src=35, dst=34
-v_mov_b32 v34, v35                                 // rC[0+0*VW+17*TT0I] = rC[1+0*VW+17*TT0I]
-// src=37, dst=36
-v_mov_b32 v36, v37                                 // rC[0+0*VW+18*TT0I] = rC[1+0*VW+18*TT0I]
-// src=39, dst=38
-v_mov_b32 v38, v39                                 // rC[0+0*VW+19*TT0I] = rC[1+0*VW+19*TT0I]
-// src=41, dst=40
-v_mov_b32 v40, v41                                 // rC[0+0*VW+20*TT0I] = rC[1+0*VW+20*TT0I]
-// src=43, dst=42
-v_mov_b32 v42, v43                                 // rC[0+0*VW+21*TT0I] = rC[1+0*VW+21*TT0I]
-// src=45, dst=44
-v_mov_b32 v44, v45                                 // rC[0+0*VW+22*TT0I] = rC[1+0*VW+22*TT0I]
-// src=47, dst=46
-v_mov_b32 v46, v47                                 // rC[0+0*VW+23*TT0I] = rC[1+0*VW+23*TT0I]
-// src=49, dst=48
-v_mov_b32 v48, v49                                 // rC[0+0*VW+24*TT0I] = rC[1+0*VW+24*TT0I]
-// src=51, dst=50
-v_mov_b32 v50, v51                                 // rC[0+0*VW+25*TT0I] = rC[1+0*VW+25*TT0I]
-// src=53, dst=52
-v_mov_b32 v52, v53                                 // rC[0+0*VW+26*TT0I] = rC[1+0*VW+26*TT0I]
-// src=55, dst=54
-v_mov_b32 v54, v55                                 // rC[0+0*VW+27*TT0I] = rC[1+0*VW+27*TT0I]
-// src=57, dst=56
-v_mov_b32 v56, v57                                 // rC[0+0*VW+28*TT0I] = rC[1+0*VW+28*TT0I]
-// src=59, dst=58
-v_mov_b32 v58, v59                                 // rC[0+0*VW+29*TT0I] = rC[1+0*VW+29*TT0I]
-// src=61, dst=60
-v_mov_b32 v60, v61                                 // rC[0+0*VW+30*TT0I] = rC[1+0*VW+30*TT0I]
-// src=63, dst=62
-v_mov_b32 v62, v63                                 // rC[0+0*VW+31*TT0I] = rC[1+0*VW+31*TT0I]
+label_00150:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001500
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001501
+s_branch label_001502
+label_001500:
+v_mov_b32 v[vgprValuC+ 0+ 0], v[vgprValuC+ 0+ 1]
+v_mov_b32 v[vgprValuC+32+ 0], v[vgprValuC+32+ 1]
+label_001501:
+v_mov_b32 v[vgprValuC+ 0+ 2], v[vgprValuC+ 0+ 3]
+v_mov_b32 v[vgprValuC+32+ 2], v[vgprValuC+32+ 3]
+label_001502:
 s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
 s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
 s_branch label_0016                                // done shifting
+
+
+label_00151:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001510
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001511
+s_branch label_001512
+label_001510:
+v_mov_b32 v[vgprValuC+ 0+ 4], v[vgprValuC+ 0+ 5]
+v_mov_b32 v[vgprValuC+32+ 4], v[vgprValuC+32+ 5]
+label_001511:
+v_mov_b32 v[vgprValuC+ 0+ 6], v[vgprValuC+ 0+ 7]
+v_mov_b32 v[vgprValuC+32+ 6], v[vgprValuC+32+ 7]
+label_001512:
+s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
+s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
+s_branch label_0016
+
+label_00152:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001520
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001521
+s_branch label_001522
+label_001520:
+v_mov_b32 v[vgprValuC+ 0+ 8], v[vgprValuC+ 0+ 9]
+v_mov_b32 v[vgprValuC+32+ 8], v[vgprValuC+32+ 9]
+label_001521:
+v_mov_b32 v[vgprValuC+ 0+10], v[vgprValuC+ 0+11]
+v_mov_b32 v[vgprValuC+32+10], v[vgprValuC+32+11]
+label_001522:
+s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
+s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
+s_branch label_0016                                // done shifting
+
+
+label_00153:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001530
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001531
+s_branch label_001532
+label_001530:
+v_mov_b32 v[vgprValuC+ 0+12], v[vgprValuC+ 0+13]
+v_mov_b32 v[vgprValuC+32+12], v[vgprValuC+32+13]
+label_001531:
+v_mov_b32 v[vgprValuC+ 0+14], v[vgprValuC+ 0+15]
+v_mov_b32 v[vgprValuC+32+14], v[vgprValuC+32+15]
+label_001532:
+s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
+s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
+s_branch label_0016                                // done shifting
+
+label_00154:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001540
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001541
+s_branch label_001542
+label_001540:
+v_mov_b32 v[vgprValuC+16+ 0], v[vgprValuC+16+ 1]
+v_mov_b32 v[vgprValuC+48+ 0], v[vgprValuC+48+ 1]
+label_001541:
+v_mov_b32 v[vgprValuC+16+ 2], v[vgprValuC+16+ 3]
+v_mov_b32 v[vgprValuC+48+ 2], v[vgprValuC+48+ 3]
+label_001542:
+s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
+s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
+s_branch label_0016                                // done shifting
+
+
+label_00155:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001550
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001551
+s_branch label_001552
+label_001550:
+v_mov_b32 v[vgprValuC+16+ 4], v[vgprValuC+16+ 5]
+v_mov_b32 v[vgprValuC+48+ 4], v[vgprValuC+48+ 5]
+label_001551:
+v_mov_b32 v[vgprValuC+16+ 6], v[vgprValuC+16+ 7]
+v_mov_b32 v[vgprValuC+48+ 6], v[vgprValuC+48+ 7]
+label_001552:
+s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
+s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
+s_branch label_0016                                // done shifting
+
+label_00156:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001560
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001561
+s_branch label_001562
+label_001560:
+v_mov_b32 v[vgprValuC+16+ 8], v[vgprValuC+16+ 9]
+v_mov_b32 v[vgprValuC+48+ 8], v[vgprValuC+48+ 9]
+label_001561:
+v_mov_b32 v[vgprValuC+16+10], v[vgprValuC+16+11]
+v_mov_b32 v[vgprValuC+48+10], v[vgprValuC+48+11]
+label_001562:
+s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
+s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
+s_branch label_0016                                // done shifting
+
+
+label_00157:
+v_cmpx_eq_u32 s[56:57], v72, v71
+v_cmp_eq_u32 vcc, v73, 0x1
+s_cbranch_vccnz label_001570
+v_cmp_eq_u32 vcc, v73, 0x3
+s_cbranch_vccnz label_001571
+s_branch label_001572
+label_001570:
+v_mov_b32 v[vgprValuC+16+12], v[vgprValuC+16+13]
+v_mov_b32 v[vgprValuC+48+12], v[vgprValuC+48+13]
+label_001571:
+v_mov_b32 v[vgprValuC+16+14], v[vgprValuC+16+15]
+v_mov_b32 v[vgprValuC+48+14], v[vgprValuC+48+15]
+label_001572:
+s_mov_b64 s[56:57], 0xFFFFFFFFFFFFFFFF             // to restore all threads active
+s_or_saveexec_b64 vcc, s[56:57]                    // all threads active
+s_branch label_0016                                // done shifting
+
 label_0016: // end shift0
-
-
 
 /* not-LocalSplitU: global write indices */
 
