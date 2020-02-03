@@ -394,7 +394,8 @@ bool tensileAlmostEqual(tensile_bfloat16 a, tensile_bfloat16 b) {
   tensile_bfloat16 absA = (a > static_cast<tensile_bfloat16>(0.0f)) ? a : static_cast<tensile_bfloat16>(0.0f) - a;
   tensile_bfloat16 absB = (b > static_cast<tensile_bfloat16>(0.0f)) ? b : static_cast<tensile_bfloat16>(0.0f) - b;
   tensile_bfloat16 absDiff = (a-b > static_cast<tensile_bfloat16>(0.0f)) ? a-b : b-a;
-  return absDiff/(absA+absB+static_cast<tensile_bfloat16>(1.0f)) < static_cast<tensile_bfloat16>(0.1f);
+  //return absDiff/(absA+absB+static_cast<tensile_bfloat16>(1.0f)) < static_cast<tensile_bfloat16>(0.001f);
+  return a == b;
 }
 template< >
 bool tensileAlmostEqual(float a, float b) {
