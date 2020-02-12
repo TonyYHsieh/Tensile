@@ -69,6 +69,7 @@ var sgprLocalWriteAddrA=76
 var sgprLocalWriteAddrB=78
 var hw_id = 80
 var sgprFetchSubGrpId=82
+var sgprGSUSumIdx=100
 
 
 /////vreg def////////////////
@@ -184,9 +185,9 @@ shader main
   //bit[5-4] //simdId
   //bit[11-8] //CuId
 
-  v_mov_b32           v[vgprSerial], v0        //thread serial Id
+  v_mov_b32          v[vgprSerial], v0        //thread serial Id
   // v[vgprSerial+1] = v[vgprSerial] & 63
-  v_and_b32             v[vgprSerial+1], 0x3f, v0            //threadId-x
+  v_and_b32          v[vgprSerial+1], 0x3f, v0            //threadId-x
   // v2 sub group id
   v_lshrrev_b32      v2,  6,  v[vgprSerial]
 
@@ -203,7 +204,11 @@ shader main
   s_load_dword s[sgprNumWorkGroups0], s[sgprKernArgAddress:sgprKernArgAddress+1], 0x74
   */
 
+  // get real GSU index and real sgprWorkGroup1
+  s_and_b32  s[sgprGSUSumIdx], 1, s[sgprWorkGroup1]
+  s_lshr_b32 s[sgprWorkGroup1], s[sgprWorkGroup1], 1
 
+  // branch for computing and fetching part
   s_cmp_eq_u32     s[hw_id+1], 1
   s_cbranch_scc0   wave0_entry_start
 
@@ -255,13 +260,16 @@ shader main
 //  s_cselect_b32  s[sgprSrdA+2], s[sgprShadowLimitA+0], BufferLimit  // move shadow to real if we are within 2^32
   s_mov_b32       s[sgprSrdA+2], BufferLimit
 
-  s_mul_i32        s84,       s[sgprStridesA+0], 64      // MT * stride
-  s_mul_i32        s84,       s[sgprWorkGroup0], s84    // workGroup[0] * MT * stride (this.workgroup start address)
-  s_mul_i32        s85,       s[sgprFetchSubGrpId], 16  // s85 = fetchId * x16 rows per wave
-  s_mul_i32        s83,       s85, s[sgprStridesA+0]     // wave start offset
-  s_mul_i32        s85,       s[sgprWorkGroup2], s[sgprStridesA+1]
-  s_add_i32        s84,       s84, s83                  // s84: global start read address for wave (this.workgroup.this.wave start address)
-  s_add_u32        s84,       s84, s85
+
+  s_mul_i32      s84, s[sgprStridesA+0], 64      // MT * stride
+  s_mul_i32      s84, s[sgprWorkGroup0], s84     // workGroup[0] * MT * stride (this.workgroup start address)
+  s_mul_i32      s85, s[sgprFetchSubGrpId], 16   // s85 = fetchId * x16 rows per wave
+  s_mul_i32      s85, s85, s[sgprStridesA+0]     // wave start offset
+  s_add_u32      s84, s84, s85
+  s_mul_i32      s85, s[sgprWorkGroup2], s[sgprStridesA+1]
+  s_add_u32      s84, s84, s85
+  s_mul_i32      s85, 0x20, s[sgprGSUSumIdx]     // GSU offset
+  s_add_u32      s84, s84, s85
 
   /* tile offset assignment a : global read address */
   // LVCA= 8
@@ -303,10 +311,13 @@ shader main
   s_mul_i32        s84,       s[sgprStridesB+0], 128            // MT * stride
   s_mul_i32        s84,       s[sgprWorkGroup1], s84            // workGroup[1] * MT * stride
   s_mul_i32        s85,       s[sgprFetchSubGrpId], 32          // s85 = fetchId * rows per wave
-  s_mul_i32        s83,       s85, s[sgprStridesB+0]            // wave start offset
-  s_mul_i32        s85,       s[sgprWorkGroup2], s[sgprStridesB+1]
-  s_add_i32        s84,       s84, s83                          // workGroup[1] * MT * stride + simdId * sub_MT * stride
+  s_mul_i32        s85,       s85, s[sgprStridesB+0]            // wave start offset
   s_add_u32        s84,       s84, s85
+  s_mul_i32        s85,       s[sgprWorkGroup2], s[sgprStridesB+1]
+  s_add_u32        s84,       s84, s85
+  s_mul_i32        s85,       0x20, s[sgprGSUSumIdx]     // GSU offset
+  s_add_u32        s84,       s84, s85
+
 
   /* tile offset assignment b : global read address */
   // LVCA= 8
@@ -351,9 +362,9 @@ shader main
   v_add_u32    v[vgprLocalWriteAddrB+1], v1, v[vgprLocalWriteAddrB+1]
 
   // offset global read address for unrolling loop
-  v_add_u32    v[vgprGlobalReadOfvarA1+0], v[vgprGlobalReadOfvarA0+0], 64
-  v_add_u32    v[vgprGlobalReadOfvarB1+0], v[vgprGlobalReadOfvarB0+0], 64
-  v_add_u32    v[vgprGlobalReadOfvarB1+1], v[vgprGlobalReadOfvarB0+1], 64
+  v_add_u32    v[vgprGlobalReadOfvarA1+0], 128, v[vgprGlobalReadOfvarA0+0]
+  v_add_u32    v[vgprGlobalReadOfvarB1+0], 128, v[vgprGlobalReadOfvarB0+0]
+  v_add_u32    v[vgprGlobalReadOfvarB1+1], 128, v[vgprGlobalReadOfvarB0+1]
 
 
   //////////////preload to LDS///////////
@@ -381,12 +392,12 @@ shader main
   buffer_load_dwordx4 v[vgprG2LB1+0],  v[vgprGlobalReadOfvarB1+0],  s[sgprSrdB:sgprSrdB+3], 0 offen:1
   buffer_load_dwordx4 v[vgprG2LB1+4],  v[vgprGlobalReadOfvarB1+1],  s[sgprSrdB:sgprSrdB+3], 0 offen:1
 
-  v_add_u32 v[vgprGlobalReadOfvarA0+0], 128, v[vgprGlobalReadOfvarA0+0]
-  v_add_u32 v[vgprGlobalReadOfvarB0+0], 128, v[vgprGlobalReadOfvarB0+0]
-  v_add_u32 v[vgprGlobalReadOfvarB0+1], 128, v[vgprGlobalReadOfvarB0+1]
+  v_add_u32 v[vgprGlobalReadOfvarA0+0], 256, v[vgprGlobalReadOfvarA0+0]
+  v_add_u32 v[vgprGlobalReadOfvarB0+0], 256, v[vgprGlobalReadOfvarB0+0]
+  v_add_u32 v[vgprGlobalReadOfvarB0+1], 256, v[vgprGlobalReadOfvarB0+1]
 
 
-  s_lshr_b32       s[sgprLoopCounters+0], s[sgprSizesSum+0], 5 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 32
+  s_lshr_b32       s[sgprLoopCounters+0], s[sgprSizesSum+0], 6 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / DU(32) / GSU(2)
   s_sub_u32        s[sgprLoopCounters+0], 0x0, s[sgprLoopCounters+0]
   s_cmp_eq_u32     s[sgprLoopCounters+0], -0x2            // numIter0I == 0
   s_cbranch_scc1   label_0006                           // Dont enter Loop
@@ -415,13 +426,13 @@ label_0005:
 
   s_setprio 1
   // increase global read address for LDS[0]
-  v_add_u32 v[vgprGlobalReadOfvarA0+0], 128, v[vgprGlobalReadOfvarA0+0]
-  v_add_u32 v[vgprGlobalReadOfvarB0+0], 128, v[vgprGlobalReadOfvarB0+0]
-  v_add_u32 v[vgprGlobalReadOfvarB0+1], 128, v[vgprGlobalReadOfvarB0+1]
+  v_add_u32 v[vgprGlobalReadOfvarA0+0], 256, v[vgprGlobalReadOfvarA0+0]
+  v_add_u32 v[vgprGlobalReadOfvarB0+0], 256, v[vgprGlobalReadOfvarB0+0]
+  v_add_u32 v[vgprGlobalReadOfvarB0+1], 256, v[vgprGlobalReadOfvarB0+1]
   // increase global read address for LDS[1]
-  v_add_u32 v[vgprGlobalReadOfvarA1+0], 128, v[vgprGlobalReadOfvarA1+0]
-  v_add_u32 v[vgprGlobalReadOfvarB1+0], 128, v[vgprGlobalReadOfvarB1+0]
-  v_add_u32 v[vgprGlobalReadOfvarB1+1], 128, v[vgprGlobalReadOfvarB1+1]
+  v_add_u32 v[vgprGlobalReadOfvarA1+0], 256, v[vgprGlobalReadOfvarA1+0]
+  v_add_u32 v[vgprGlobalReadOfvarB1+0], 256, v[vgprGlobalReadOfvarB1+0]
+  v_add_u32 v[vgprGlobalReadOfvarB1+1], 256, v[vgprGlobalReadOfvarB1+1]
   s_setprio 0
 
 
@@ -742,7 +753,7 @@ wave0_entry_start:
   s_waitcnt lgkmcnt(0)
   s_barrier // compute barrier 2 : ready for update LDS///////////
 
-  s_lshr_b32        s[sgprLoopCounters+0], s[sgprSizesSum+0], 5 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 32
+  s_lshr_b32        s[sgprLoopCounters+0], s[sgprSizesSum+0], 6 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / DU(32) / GSU(2)
   s_sub_u32         s[sgprLoopCounters+0], 0x0, s[sgprLoopCounters+0]
   s_cmp_eq_u32      s[sgprLoopCounters+0], -0x2            // numIter0I == 0
   s_cbranch_scc1    label_0004                           // Dont enter Loop
