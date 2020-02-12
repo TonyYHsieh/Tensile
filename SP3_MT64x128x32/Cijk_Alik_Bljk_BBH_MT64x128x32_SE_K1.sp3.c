@@ -1036,9 +1036,9 @@ store_c:
     v_mul_f32     v[vgprValuC+j+0], s[sgprAlpha], v[vgprValuC+j+0]
     v_mul_f32     v[vgprValuC+j+1], s[sgprAlpha], v[vgprValuC+j+1]
     // D = beta * C + (alpha*A*B)
-    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC0+(j/2)]
+    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j]
-    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC0+(j/2)]
+    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j+1], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j+1]
     // convert to bf16 format
     v_lshrrev_b32    v[vgprValuC+j], 16, v[vgprValuC+j]
@@ -1054,9 +1054,9 @@ store_c:
     v_mul_f32     v[vgprValuC+j+0], s[sgprAlpha], v[vgprValuC+j+0]
     v_mul_f32     v[vgprValuC+j+1], s[sgprAlpha], v[vgprValuC+j+1]
     // D = beta * C + (alpha*A*B)
-    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC0+(j/2)]
+    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j]
-    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC0+(j/2)]
+    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j+1], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j+1]
     // convert to bf16 format
     v_lshrrev_b32    v[vgprValuC+j], 16, v[vgprValuC+j]
@@ -1078,9 +1078,9 @@ store_c:
     v_mul_f32     v[vgprValuC+j+0], s[sgprAlpha], v[vgprValuC+j+0]
     v_mul_f32     v[vgprValuC+j+1], s[sgprAlpha], v[vgprValuC+j+1]
     // D = beta * C + (alpha*A*B)
-    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC0+(j/2)]
+    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j]
-    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC0+(j/2)]
+    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j+1], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j+1]
     // convert to bf16 format
     v_lshrrev_b32    v[vgprValuC+j], 16, v[vgprValuC+j]
@@ -1102,9 +1102,9 @@ store_c:
     v_mul_f32     v[vgprValuC+j+0], s[sgprAlpha], v[vgprValuC+j+0]
     v_mul_f32     v[vgprValuC+j+1], s[sgprAlpha], v[vgprValuC+j+1]
     // D = beta * C + (alpha*A*B)
-    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC0+(j/2)]
+    v_lshlrev_b32 v[vgprTmp+1], 16, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j]
-    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC0+(j/2)]
+    v_and_b32     v[vgprTmp+1], roundMaskVal, v[vgprValuSrcC1+(j/2)]
     v_mad_f32     v[vgprValuC+j+1], s[sgprBeta], v[vgprTmp+1], v[vgprValuC+j+1]
     // convert to bf16 format
     v_lshrrev_b32    v[vgprValuC+j], 16, v[vgprValuC+j]
