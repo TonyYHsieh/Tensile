@@ -92,7 +92,6 @@ var vgprTmp=106
 
 ////constant def/////////////
 var varlds_pad            = 8
-var varlds_pad_qw         = varlds_pad >> 2
 var varlds_Asize_per_wr   = 256+varlds_pad                  //each load inst load one 32X4 block.    need contiunous 32X4X2=256    bytes in LDS
 var varlds_Asize_per_wave = varlds_Asize_per_wr * 4   //each wave load 4 32X4 block one time.  need contiunous 32X4X4X2=1024 bytes in LDS
 var varlds_Asize_per_wg   = varlds_Asize_per_wave * 4 //WG load 16 32X4 block(64X32) Matrix A to lds for pingpong.
@@ -578,39 +577,45 @@ wave0_entry_start:
 /* Local Read Addresses                   */
 /******************************************/
  
-  //32 lanes for holding M elements
-  v_and_b32        v1, v[vgprSerial+1],  0x1f
-  v_mul_lo_u32     v[vgprLocalReadAddrA+0],  16, v1
-  v_lshrrev_b32    v1, 2, v1
-  v_mul_lo_u32     v1, varlds_pad_qw, v1
-  v_add_u32        v[vgprLocalReadAddrA+0],  v1,  v[vgprLocalReadAddrA+0]
+  // 32 lanes for holding M elements
+  v_and_b32        v1, v[vgprSerial+1], 0x1f
+  v_mul_lo_u32     v[vgprLocalReadAddrA+0], 32, v1
+  v_lshrrev_b32    v2, 2, v1                         // padding per 256 bytes, padding per 4 lines
+  v_mul_lo_u32     v2, varlds_pad, v2
 
-/* local read addresses: final offsets a */
-
-  v_lshrrev_b32    v1, 5,  v[vgprSerial+1]
+  // local read addresses: final offsets a
+  v_lshrrev_b32    v1, 5, v[vgprSerial+1]
+  v_lshlrev_b32    v1, 1, v1
   v_add_u32        v[vgprLocalReadAddrA+0], v1, v[vgprLocalReadAddrA+0]
-  v_lshlrev_b32    v[vgprLocalReadAddrA+0], 2, v[vgprLocalReadAddrA+0]  //convert to bytes
+  v_lshlrev_b32    v[vgprLocalReadAddrA+0],  1, v[vgprLocalReadAddrA+0]  //convert to bytes
+
+  // add padding back
+  v_add_u32        v[vgprLocalReadAddrA+0], v2, v[vgprLocalReadAddrA+0]
+
+  // second buffer
   v_add_u32        v[vgprLocalReadAddrA+0], varA_lds_base_addr,  v[vgprLocalReadAddrA+0]
   v_add_u32        v[vgprLocalReadAddrA+1], varlds_Asize_per_wg, v[vgprLocalReadAddrA+0]
 
-   s_barrier
+  s_barrier
 
 /******************************************/
 /* Local Read Addresses Offset B          */
 /******************************************/
 
   //32 lanes for holding N elements
-  v_and_b32        v1,  v[vgprSerial+1],     0x1f
-  v_mul_lo_u32     v[vgprLocalReadAddrB+0],  16, v1
-  v_lshrrev_b32    v1,  2,  v1
-  v_mul_lo_u32     v1, varlds_pad_qw, v1
-  v_add_u32        v[vgprLocalReadAddrB+0],  v1,  v[vgprLocalReadAddrB+0]
+  v_and_b32        v1, v[vgprSerial+1], 0x1f
+  v_mul_lo_u32     v[vgprLocalReadAddrB+0], 32, v1
+  v_lshrrev_b32    v2, 2, v1
+  v_mul_lo_u32     v2, varlds_pad, v2             // padding per 256 bytes, padding per 4 lines
 
-/* local read addresses: final offsets b */
+  // local read addresses: final offsets b
+  v_lshrrev_b32    v1, 5, v[vgprSerial+1]
+  v_lshlrev_b32    v1, 1, v1
+  v_add_u32        v[vgprLocalReadAddrB+0], v1, v[vgprLocalReadAddrB+0]
+  v_lshlrev_b32    v[vgprLocalReadAddrB+0],  1, v[vgprLocalReadAddrB+0]  //convert to bytes
 
-  v_lshrrev_b32    v1,                  5,      v[vgprSerial+1]
-  v_add_u32        v[vgprLocalReadAddrB+0],  v1, v[vgprLocalReadAddrB+0]
-  v_lshlrev_b32    v[vgprLocalReadAddrB+0],  2, v[vgprLocalReadAddrB+0]  //convert to bytes
+  // add padding back
+  v_add_u32        v[vgprLocalReadAddrB+0], v2, v[vgprLocalReadAddrB+0]
 
   s_mul_i32        s84,  s[sgprFetchSubGrpId],    varlds_Bsize_per_wave
   v_add_u32        v[vgprLocalReadAddrB+0], s84, v[vgprLocalReadAddrB+0]
