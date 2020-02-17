@@ -71,21 +71,22 @@ var hw_id = 80
 var sgprFetchSubGrpId=82
 
 
-/////vreg def////////////////
+/////compute fetch def////////////////
+var vgprG2LA=0
+var vgprG2LB=8
+var vgprLocalWriteAddrA=24
+var vgprLocalWriteAddrB=32
+var vgprGlobalReadOfvarA=48
+var vgprGlobalReadOfvarB=56
+
+/////compute vreg def////////////////
 
 var vgprValuC=0
 var vgprAcc=0
 var vgprValuA_X0_I0=32
-var vgprValuA_X0_I1=48
-var vgprG2LA=48
-var vgprValuB_X0_I0=68
-var vgprG2LB=68
-var vgprLocalWriteAddrA=76
-var vgprLocalWriteAddrB=78
-var vgprGlobalReadOfvarA=82
-var vgprGlobalReadOfvarB=86
-var vgprLocalReadAddrA=94
-var vgprLocalReadAddrB=96
+var vgprValuB_X0_I0=64
+var vgprLocalReadAddrA=80
+var vgprLocalReadAddrB=92
 var vgprSerial=100
 var vgprGlobalWriteOfvarC=104
 var vgprTmp=106
