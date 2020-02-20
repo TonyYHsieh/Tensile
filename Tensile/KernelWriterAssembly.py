@@ -7317,8 +7317,8 @@ class KernelWriterAssembly(KernelWriter):
                 vgpr("ValuC+%u" % regIdx), vgpr("ValuC+%u"%cIdx), "c[%u] += c[%u], real part"%(cIdx, regIdx) )
             kStr += inst("v_add_f64", vgpr("ValuC+%u"%(cIdx+2)), \
                 vgpr("ValuC+%u" % (regIdx+2)), vgpr("ValuC+%u"%(cIdx+2)), "c[%u] += c[%u], imaginary part"%(cIdx+2, regIdx+2) )
-          else:
-            assert(0) # unsupported data type, need to modify here and LSU write/read code
+#          else:
+#            assert(0) # unsupported data type, need to modify here and LSU write/read code
     return kStr
 
   ##############################################################################
