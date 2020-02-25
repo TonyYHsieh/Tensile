@@ -72,8 +72,8 @@ var sgprFetchSubGrpId=82
 
 
 /////vreg def////////////////
-
-var vgprValuC=0
+var vgprValuD=0
+var vgprValuC=16
 var vgprAcc=0
 var vgprValuA_X0_I0=32
 var vgprValuA_X0_I1=48
@@ -87,7 +87,8 @@ var vgprGlobalReadOfvarB=86
 var vgprLocalReadAddrA=94
 var vgprLocalReadAddrB=96
 var vgprSerial=100
-var vgprGlobalWriteOfvarC=104
+var vgprGlobalReadOfvarC=104
+var vgprGlobalWriteOfvarD=105
 var vgprTmp=106
 
 ////constant def/////////////
@@ -606,52 +607,69 @@ wave0_entry_start:
   /*****************************************************************/
   /* Global Address C calculation */
   /*****************************************************************/
-  s_mov_b32       s[sgprSrdC+0], s[sgprAddressC+0]              // init SRD base address (lower)
-  s_mov_b32       s[sgprSrdC+1], s[sgprAddressC+1]              // init SRD base address (lower)
-  s_mov_b32       s[sgprSrdC+2], 0x80000000                     // limit at 2*31
-  s_mov_b32       s[sgprSrdC+3], Srd127_96                      // Set bits 127_96 in SRD
+  s_mov_b32       s[sgprSrdC+0], s[sgprAddressC+0]                         // init SRD base address (lower)
+  s_mov_b32       s[sgprSrdC+1], s[sgprAddressC+1]                         // init SRD base address (lower)
+  s_mov_b32       s[sgprSrdC+2], 0x80000000                                // limit at 2*31
+  s_mov_b32       s[sgprSrdC+3], Srd127_96                                 // Set bits 127_96 in SRD
 
-  s_mov_b32       s[sgprSrdD+0], s[sgprAddressD+0]              // init SRD base address (lower)
-  s_mov_b32       s[sgprSrdD+1], s[sgprAddressD+1]              // set const_stride=4 for idxen
-  s_mov_b32       s[sgprSrdD+2], 0x80000000                     // limit at 2*31
-  s_mov_b32       s[sgprSrdD+3], Srd127_96                      // Set bits 127_96 in SRD
-
-  s_mul_i32       s86, 0x40, s[sgprWorkGroup1]                  // <- wg1*MT1
+  s_mul_i32       s86, 0x40, s[sgprWorkGroup1]                             // <- wg1*MT1
   s_mul_hi_u32    s85, s86,  s[sgprStridesC+0]
-  s_mul_i32       s84, s86,  s[sgprStridesC+0]                  // scale by stride
-  s_lshl_b64      s[84:85],  s[84:85], 1                        // scale by bpe
+  s_mul_i32       s84, s86,  s[sgprStridesC+0]                             // scale by stride
+  s_lshl_b64      s[84:85],  s[84:85], 1                                   // scale by bpe
   s_add_u32       s[sgprSrdC+0], s[sgprSrdC+0], s84
   s_addc_u32      s[sgprSrdC+1], s[sgprSrdC+1], s85
+
+  s_mul_hi_u32    s85, s[sgprWorkGroup2], s[sgprStridesC+1]                // Scale s[sgprWorkGroup2] by stride
+  s_mul_i32       s84, s[sgprWorkGroup2], s[sgprStridesC+1]                // Scale s[sgprWorkGroup2] by stride
+  s_lshl_b64      s[84:85],  s[84:85], 1                                   // scale by bpe
+  s_add_u32       s[sgprSrdC+0], s[sgprSrdC+0], s84
+  s_addc_u32      s[sgprSrdC+1], s[sgprSrdC+1], s85
+
+  //use threadIdz to re-map threadIdx using for calculating waveId start off set for MAC wves to store 'C'
+  v_mul_lo_u32    v4, 0x10, v[vgprSerial+2]                                // 1. scale by sub-tile-size 16 (B-tile/64)
+  v_mul_lo_u32    v3, v4,   s[sgprStridesC+0]                              // 1. wavestart vgpr
+  v_and_b32       v4, 0x0f, v[vgprSerial+1]                                // 2. vectorStaticDiv vgprTmp = vgprSerial % 16
+  v_mul_lo_u32    v5, v4,   s[sgprStridesC+0]                              // 2. rowstart VGPR
+  v_lshrrev_b32   v6, 4,    v[vgprSerial+1]                                // 3. vectorStaticDiv vgprTmp = vgprSerial / 16
+  v_lshlrev_b32   v6, 2,    v6                                             // 3. vgprSerial / 16 * 4
+  v_add_u32       v[vgprTmp+1], v3,  v5
+  s_mul_i32       s84, 0x20, s[sgprWorkGroup0]                             // 4. s84 = wgp0*MT0
+  v_add_co_u32    v[vgprTmp], vcc, s84, v6
+  v_add_lshl_u32  v[vgprGlobalReadOfvarC], v[vgprTmp], v[vgprTmp+1], 0x1   // 5. c base_addr = wave_start+row_start scaled by BPE
+
+
+  /*****************************************************************/
+  /* Global Address D calculation */
+  /*****************************************************************/
+  s_mov_b32       s[sgprSrdD+0], s[sgprAddressD+0]                         // init SRD base address (lower)
+  s_mov_b32       s[sgprSrdD+1], s[sgprAddressD+1]                         // set const_stride=4 for idxen
+  s_mov_b32       s[sgprSrdD+2], 0x80000000                                // limit at 2*31
+  s_mov_b32       s[sgprSrdD+3], Srd127_96                                 // Set bits 127_96 in SRD
+
+  s_mul_i32       s86, 0x40, s[sgprWorkGroup1]                             // <- wg1*MT1
+  s_mul_hi_u32    s85, s86,  s[sgprStridesD+0]
+  s_mul_i32       s84, s86,  s[sgprStridesD+0]                             // scale by stride
+  s_lshl_b64      s[84:85],  s[84:85], 1                                   // scale by bpe
   s_add_u32       s[sgprSrdD+0], s[sgprSrdD+0], s84
   s_addc_u32      s[sgprSrdD+1], s[sgprSrdD+1], s85
 
-  s_mul_hi_u32    s85, s[sgprWorkGroup2], s[sgprStridesC+1]     // Scale s[sgprWorkGroup2] by stride
-  s_mul_i32       s84, s[sgprWorkGroup2], s[sgprStridesC+1]     // Scale s[sgprWorkGroup2] by stride
-  s_lshl_b64      s[84:85],  s[84:85], 1                        // scale by bpe
-  s_add_u32       s[sgprSrdC+0], s[sgprSrdC+0], s84
-  s_addc_u32      s[sgprSrdC+1], s[sgprSrdC+1], s85
+  s_mul_hi_u32    s85, s[sgprWorkGroup2], s[sgprStridesD+1]                // Scale s[sgprWorkGroup2] by stride
+  s_mul_i32       s84, s[sgprWorkGroup2], s[sgprStridesD+1]                // Scale s[sgprWorkGroup2] by stride
+  s_lshl_b64      s[84:85],  s[84:85], 1                                   // scale by bpe
   s_add_u32       s[sgprSrdD+0], s[sgprSrdD+0], s84
   s_addc_u32      s[sgprSrdD+1], s[sgprSrdD+1], s85
 
   //use threadIdz to re-map threadIdx using for calculating waveId start off set for MAC wves to store 'C'
-  v_lshlrev_b32   v[vgprSerial], 6, v[vgprSerial+2]          // threadIdx = simdId<<6
-  v_add_u32       v[vgprSerial], v[vgprSerial+1], v[vgprSerial] // threadIdx = threadIdx + 0-63
-
-  v_mul_lo_u32    v4, 0x10, v[vgprSerial+2]                     // scale by sub-tile-size 16 (B-tile/64)
-  v_mul_lo_u32    v3, v4,   s[sgprStridesC+0]                   // wavestart vgpr
-
-  v_and_b32       v4, 0x0f, v[vgprSerial]                       // vectorStaticDiv vgprTmp = vgprSerial % 16
-  v_mul_lo_u32    v5, v4,   s[sgprStridesC+0]                   // rowstart VGPR
-
-  v_and_b32       v4, 0x3f, v[vgprSerial]                       // vectorStaticDiv vgprTmp = vgprSerial % 64
-  v_lshrrev_b32   v6, 4,    v4                                  // vectorStaticDiv vgprTmp = vgprSerial / 16
-  v_lshlrev_b32   v6, 2,    v6                                  // vgprSerial / 16 * 4
+  v_mul_lo_u32    v4, 0x10, v[vgprSerial+2]                                // 1. scale by sub-tile-size 16 (B-tile/64)
+  v_mul_lo_u32    v3, v4,   s[sgprStridesD+0]                              // 1. wavestart vgpr
+  v_and_b32       v4, 0x0f, v[vgprSerial+1]                                // 2. vectorStaticDiv vgprTmp = vgprSerial % 16
+  v_mul_lo_u32    v5, v4,   s[sgprStridesD+0]                              // 2. rowstart VGPR
+  v_lshrrev_b32   v6, 4,    v[vgprSerial+1]                                // 3. vectorStaticDiv vgprTmp = vgprSerial / 16
+  v_lshlrev_b32   v6, 2,    v6                                             // 3. vgprSerial / 16 * 4
   v_add_u32       v[vgprTmp+1], v3,  v5
-
-  s_mul_i32       s84, 0x20, s[sgprWorkGroup0]                  // s84 = wgp0*MT0
+  s_mul_i32       s84, 0x20, s[sgprWorkGroup0]                             // 4. s84 = wgp0*MT0
   v_add_co_u32    v[vgprTmp], vcc, s84, v6
-
-  v_add_lshl_u32  v[vgprGlobalWriteOfvarC], v[vgprTmp], v[vgprTmp+1], 0x1    // c base_addr = wave_start+row_start scaled by BPE
+  v_add_lshl_u32  v[vgprGlobalWriteOfvarD], v[vgprTmp], v[vgprTmp+1], 0x1  // 5. c base_addr = wave_start+row_start scaled by BPE
 
   s_barrier
 
@@ -678,6 +696,8 @@ wave0_entry_start:
   ds_read_b32       v[vgprValuB_X0_I0+0* 8+    1],  v[vgprLocalReadAddrB+0]  offset: 16
   ds_read_b32       v[vgprValuB_X0_I0+0* 8+    2],  v[vgprLocalReadAddrB+0]  offset: 32
   ds_read_b32       v[vgprValuB_X0_I0+0* 8+    3],  v[vgprLocalReadAddrB+0]  offset: 48
+
+
   ds_read_b32       v[vgprValuB_X0_I0+0* 8+    4],  v[vgprLocalReadAddrB+0]  offset: 64
   ds_read_b32       v[vgprValuB_X0_I0+0* 8+    5],  v[vgprLocalReadAddrB+0]  offset: 80
 
@@ -773,12 +793,14 @@ label_0002:
   /*****************************************************************/
      s_waitcnt lgkmcnt(5)
      v_mfma_f32_16x16x8bf16   v[vgprAcc+0],  v[vgprValuA_X0_I0+0*16+0*8+0],  v[vgprValuB_X0_I0+0*8+0],  v[vgprAcc+0]
-     ds_read_b32       v_regs(vgprValuB_X0_I0, 0* 8+    6),  v_regs(vgprLocalReadAddrB,0)  offset: 96
-     ds_read_b32       v_regs(vgprValuB_X0_I0, 0* 8+    7),  v_regs(vgprLocalReadAddrB,0)  offset:112
+     buffer_load_dwordx2 v[vgprValuC+0:vgprValuC+1], v[vgprGlobalReadOfvarC], s[sgprSrdC:sgprSrdC+3], 0 offset:32*0 offen:1
+     buffer_load_dwordx2 v[vgprValuC+2:vgprValuC+3], v[vgprGlobalReadOfvarC], s[sgprSrdC:sgprSrdC+3], 0 offset:32*1 offen:1
      v_mfma_f32_16x16x8bf16   v[vgprAcc+4],  v[vgprValuA_X0_I0+0*16+1*8+0],  v[vgprValuB_X0_I0+0*8+0],  v[vgprAcc+4]
 
      s_waitcnt lgkmcnt(6)
      v_mfma_f32_16x16x8bf16   v[vgprAcc+0],  v[vgprValuA_X0_I0+0*16+0*8+1],  v[vgprValuB_X0_I0+0*8+1],  v[vgprAcc+0]
+     ds_read_b32       v_regs(vgprValuB_X0_I0, 0* 8+    6),  v_regs(vgprLocalReadAddrB,0)  offset: 96
+     ds_read_b32       v_regs(vgprValuB_X0_I0, 0* 8+    7),  v_regs(vgprLocalReadAddrB,0)  offset:112
      v_mfma_f32_16x16x8bf16   v[vgprAcc+4],  v[vgprValuA_X0_I0+0*16+1*8+1],  v[vgprValuB_X0_I0+0*8+1],  v[vgprAcc+4]
 
      s_waitcnt lgkmcnt(5)
@@ -858,24 +880,36 @@ label_0002:
      v_mov_b32 v[vgprTmp+1], roundMaskVal
 
       for var j = 0; j < 4; j++
-          v_accvgpr_read v_regs(vgprValuC, j), v_regs(vgprAcc, j), 0
+          v_accvgpr_read v_regs(vgprValuD, j), v_regs(vgprAcc, j), 0
+          v_mul_f32 v_regs(vgprValuD, j), s[sgprAlpha], v_regs(vgprValuD, j)
       end
 
+     s_waitcnt vmcnt(1)
       for var j = 0; j < 4; j+=2
-          v_lshrrev_b32    v[vgprValuC+j], 16, v[vgprValuC+j]
-          v_and_or_b32     v[vgprValuC+(j/2)], v[vgprValuC+j+1], v[vgprTmp+1], v[vgprValuC+j]
+          v_lshlrev_b32    v[vgprTmp], 16, v[vgprValuC+(j/2)]
+          v_fma_f32        v[vgprValuD+j], v[vgprTmp], s[sgprBeta], v[vgprValuD+j]
+          v_and_b32        v[vgprTmp], roundMaskVal, v[vgprValuC+(j/2)]
+          v_fma_f32        v[vgprValuD+j+1], v[vgprTmp], s[sgprBeta], v[vgprValuD+j+1]
+          v_lshrrev_b32    v[vgprValuD+j], 16, v[vgprValuD+j]
+          v_and_or_b32     v[vgprValuD+(j/2)], v[vgprValuD+j+1], v[vgprTmp+1], v[vgprValuD+j]
       end
-      buffer_store_dwordx2 v[vgprValuC+0:vgprValuC+1], v[vgprGlobalWriteOfvarC], s[sgprSrdD:sgprSrdD+3], 0 offset:32*0 offen:1 // store C
+      buffer_store_dwordx2 v[vgprValuD+0:vgprValuD+1], v[vgprGlobalWriteOfvarD], s[sgprSrdD:sgprSrdD+3], 0 offset:32*0 offen:1 // store C
 
       for var j = 4; j < 8; j++
-          v_accvgpr_read v_regs(vgprValuC, j), v_regs(vgprAcc, j), 0
+          v_accvgpr_read v_regs(vgprValuD, j), v_regs(vgprAcc, j), 0
+          v_mul_f32 v_regs(vgprValuD, j), s[sgprAlpha], v_regs(vgprValuD, j)
       end
 
+     s_waitcnt vmcnt(0)
       for var j = 4; j < 8; j+=2
-          v_lshrrev_b32    v[vgprValuC+j], 16, v[vgprValuC+j]
-          v_and_or_b32     v[vgprValuC+(j/2)], v[vgprValuC+j+1], v[vgprTmp+1], v[vgprValuC+j]
+          v_lshlrev_b32    v[vgprTmp], 16, v[vgprValuC+(j/2)]
+          v_fma_f32        v[vgprValuD+j], v[vgprTmp], s[sgprBeta], v[vgprValuD+j]
+          v_and_b32        v[vgprTmp], roundMaskVal, v[vgprValuC+(j/2)]
+          v_fma_f32        v[vgprValuD+j+1], v[vgprTmp], s[sgprBeta], v[vgprValuD+j+1]
+          v_lshrrev_b32    v[vgprValuD+j], 16, v[vgprValuD+j]
+          v_and_or_b32     v[vgprValuD+(j/2)], v[vgprValuD+j+1], v[vgprTmp+1], v[vgprValuD+j]
       end
-      buffer_store_dwordx2 v[vgprValuC+2:vgprValuC+3], v[vgprGlobalWriteOfvarC], s[sgprSrdD:sgprSrdD+3], 0 offset:32*1 offen:1 // store C
+      buffer_store_dwordx2 v[vgprValuD+2:vgprValuD+3], v[vgprGlobalWriteOfvarD], s[sgprSrdD:sgprSrdD+3], 0 offset:32*1 offen:1 // store C
 
 label_0004:
   s_waitcnt 0
