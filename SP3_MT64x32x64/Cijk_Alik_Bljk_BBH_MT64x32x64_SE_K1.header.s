@@ -13,12 +13,12 @@
 .hsa_code_object_version 2,0
 .hsa_code_object_isa 9, 0, 8, "AMD", "AMDGPU" 
 .text
-.protected Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1
-.globl Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1
+.protected Cijk_Alik_Bljk_BBH_MT64x32x64_SE_K1
+.globl Cijk_Alik_Bljk_BBH_MT64x32x64_SE_K1
 .p2align 8
-.type Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1,@function
-.amdgpu_hsa_kernel Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1
-Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1:
+.type Cijk_Alik_Bljk_BBH_MT64x32x64_SE_K1,@function
+.amdgpu_hsa_kernel Cijk_Alik_Bljk_BBH_MT64x32x64_SE_K1
+Cijk_Alik_Bljk_BBH_MT64x32x64_SE_K1:
 .amd_kernel_code_t
   is_ptr64 = 1
   enable_sgpr_kernarg_segment_ptr = 1
@@ -51,8 +51,8 @@ Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1:
 .amd_amdgpu_hsa_metadata
 Version: [ 1, 0 ]
 Kernels:
-  - Name: Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1
-    SymbolName: 'Cijk_Alik_Bljk_BBH_MT32x64x64_SE_K1@kd'
+  - Name: Cijk_Alik_Bljk_BBH_MT64x32x64_SE_K1
+    SymbolName: 'Cijk_Alik_Bljk_BBH_MT64x32x64_SE_K1@kd'
     Language: OpenCL C
     LanguageVersion: [ 2, 0 ]
     Args:
