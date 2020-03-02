@@ -806,7 +806,7 @@ label_0002:
     v_mul_f32 v_regs(vgprValuD, j), s[sgprAlpha], v_regs(vgprValuD, j)
   end
 
-  s_waitcnt vmcnt(0)
+  s_waitcnt vmcnt(1)
   for var j = 4; j < 8; j+=2
     v_lshlrev_b32    v[vgprTmp], 16, v[vgprValuC+(j/2)]
     v_fma_f32        v[vgprValuD+j], v[vgprTmp], s[sgprBeta], v[vgprValuD+j]
