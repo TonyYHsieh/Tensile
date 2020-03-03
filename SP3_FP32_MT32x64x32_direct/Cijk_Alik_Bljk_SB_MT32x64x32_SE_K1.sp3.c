@@ -208,7 +208,7 @@ shader main
 
   s_mul_hi_u32     s85, s[sgprWorkGroup2], s[sgprStridesA+1]          // Scale s[sgprWorkGroup2] by stride
   s_mul_i32        s84, s[sgprWorkGroup2], s[sgprStridesA+1]          // Scale s[sgprWorkGroup2] by stride
-  s_lshl_b64       s[84:85],  s[84:85], 1                             // scale by bpe
+  s_lshl_b64       s[84:85],  s[84:85], 2                             // scale by bpe
   s_add_u32        s[sgprSrdA+0], s[sgprSrdA+0], s84
   s_addc_u32       s[sgprSrdA+1], s[sgprSrdA+1], s85
 
@@ -251,7 +251,7 @@ shader main
 
   s_mul_hi_u32     s85, s[sgprWorkGroup2], s[sgprStridesB+1]          // Scale s[sgprWorkGroup2] by stride
   s_mul_i32        s84, s[sgprWorkGroup2], s[sgprStridesB+1]          // Scale s[sgprWorkGroup2] by stride
-  s_lshl_b64       s[84:85],  s[84:85], 1                             // scale by bpe
+  s_lshl_b64       s[84:85],  s[84:85], 2                             // scale by bpe
   s_add_u32        s[sgprSrdB+0], s[sgprSrdB+0], s84
   s_addc_u32       s[sgprSrdB+1], s[sgprSrdB+1], s85
 
