@@ -376,7 +376,7 @@ shader main
 
   s_lshr_b32       s[sgprLoopCounters+0], s[sgprSizesSum+0], 5 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 32
   s_sub_u32        s[sgprLoopCounters+0], 0x0, s[sgprLoopCounters+0]
-  s_cmp_eq_u32     s[sgprLoopCounters+0], 0x0            // numIter0I == 0
+  s_cmp_eq_i32     s[sgprLoopCounters+0], -0x2            // numIter0I == 0
   s_cbranch_scc1   label_0006                           // Dont enter Loop
 
 /******************************************/
@@ -661,8 +661,8 @@ wave0_entry_start:
 
   s_lshr_b32      s[sgprLoopCounters+0], s[sgprSizesSum+0], 5 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 32
   s_sub_u32       s[sgprLoopCounters+0], 0x0, s[sgprLoopCounters+0]
-  s_cmp_eq_u32    s[sgprLoopCounters+0], 0x0            // numIter0I == 0
-  s_cbranch_scc1  label_0004                           // Dont enter Loop
+  s_cmp_eq_i32    s[sgprLoopCounters+0], -0x2
+  s_cbranch_scc1  label_0002                           // Dont enter Loop
 
 /******************************************/
 /* Unrolled Loop(s) - Begin               */
