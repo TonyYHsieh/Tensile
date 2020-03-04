@@ -376,7 +376,7 @@ shader main
 
   s_lshr_b32       s[sgprLoopCounters+0], s[sgprSizesSum+0], 5 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 32
   s_sub_u32        s[sgprLoopCounters+0], 0x0, s[sgprLoopCounters+0]
-  s_cmp_eq_i32     s[sgprLoopCounters+0], -0x2            // numIter0I == 0
+  s_cmp_ge_i32     s[sgprLoopCounters+0], -0x2            // numIter0I == 0
   s_cbranch_scc1   label_0006                           // Dont enter Loop
 
 /******************************************/
@@ -458,7 +458,7 @@ label_0005:
   s_mov_b32       m0, s[sgprLocalWriteAddrB+0]
   s_add_u32       s[sgprLoopCounters+0], s[sgprLoopCounters+0], 0x2        //inc CounterL
 
-  s_cmp_eq_i32    s[sgprLoopCounters+0], -0x2                    // CounterL=0x2
+  s_cmp_ge_i32    s[sgprLoopCounters+0], -0x2                    // CounterL=0x2
   s_cbranch_scc0  label_0005
 
 label_0006:
@@ -661,7 +661,7 @@ wave0_entry_start:
 
   s_lshr_b32      s[sgprLoopCounters+0], s[sgprSizesSum+0], 5 // s[sgprLoopCounters+0] = s[sgprSizesSum+0] / 32
   s_sub_u32       s[sgprLoopCounters+0], 0x0, s[sgprLoopCounters+0]
-  s_cmp_eq_i32    s[sgprLoopCounters+0], -0x2
+  s_cmp_ge_i32    s[sgprLoopCounters+0], -0x2
   s_cbranch_scc1  label_0002                           // Dont enter Loop
 
 /******************************************/
@@ -718,7 +718,7 @@ label_0001:
 
   s_add_u32       s[sgprLoopCounters+0], s[sgprLoopCounters+0], 0x2        //inc CounterL
 
-  s_cmp_eq_i32    s[sgprLoopCounters+0], -0x2                              // CounterL=0x2
+  s_cmp_ge_i32    s[sgprLoopCounters+0], -0x2                              // CounterL=0x2
   s_cbranch_scc0  label_0001
 
 label_0002:
