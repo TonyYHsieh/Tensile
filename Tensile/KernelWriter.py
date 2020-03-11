@@ -654,6 +654,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
         # can't do shadow initC with multiple summation since this resets the ValuC counters
         # on each unroll iteration.
         self.doShadowInit = 1 # 1 is just store setup
+
     if self.prefetchAcrossPersistent:
       # first prefetch is outside persistent loop, subsequent prefetch will
       # be integrated into no-load-loop
@@ -765,8 +766,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
 
       if kernel["PrefetchGlobalRead"] and not kernel["PrefetchLocalRead"]:
         if self.enable["Wait"]:
-          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, 1, 0, -1, \
-              "1wait for local write"))
+          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, 1, 0, -1, "1wait for local write"))
 
       # if not prefetch global, localWrite before mac's
       if not kernel["PrefetchGlobalRead"]:
@@ -788,8 +788,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
           """
           kl.append("    /* print Local state */" + self.endLine)
           kl.append("    for (unsigned int i = serial; i < LDS_NUM_ELEMENTS; i+=NUM_THREADS) {%s" % self.endLine)
-          kl.append("      printf(\\\"localMemory[%%06u] = %%.0f\\\\n\\\", i, localMemory[i]);%s" )
-              % self.endLine
+          kl.append("      printf(\\\"localMemory[%%06u] = %%.0f\\\\n\\\", i, localMemory[i]);%s" ) % self.endLine
           kl.append("    }" + self.endLine)
           """
 
@@ -830,12 +829,13 @@ class KernelWriter(metaclass=abc.ABCMeta):
         localReads = Code.Module()
         localReadsA = Code.Module()
         localReadsB = Code.Module()
-        for iui in range(0,kernel["InnerUnroll"]):
+        for iui in range(0, kernel["InnerUnroll"]):
           if self.enable["LocalRead"]:
             localReads.addText(self.comment("local read a"))
             localReads.addCode(self.localReadDo(kernel, plrIdx, iui, 0, tensorParametersA))
             localReads.addText(self.comment("local read b"))
             localReads.addCode(self.localReadDo(kernel, plrIdx, iui, 0, tensorParametersB))
+
             #container for holding local read A & B elements for later re-ordering
             localReadsA.addCode(self.localReadDo(kernel, plrIdx, iui, 0, tensorParametersA))
             localReadsB.addCode(self.localReadDo(kernel, plrIdx, iui, 0, tensorParametersB))

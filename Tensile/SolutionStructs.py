@@ -1651,15 +1651,15 @@ class Solution:
 
     if state["MatrixInstruction"]:
       if state["MatrixInstruction"][0] != -1:
-        if len(state["MatrixInstruction"]) == 4:
-          # check for valid instruction with input type
+        if len(state["MatrixInstruction"]) >= 4:
           itemsPerThread = state["MatrixInstruction"][0] * state["MatrixInstruction"][1] * state["MatrixInstruction"][3] // 64
-          if state["ThreadTile"][1] % itemsPerThread != 0:
-            reject(state, "ThreadTile must be a multiple of MatrixInstruction")
-          state["MatrixInstM"] = state["MatrixInstruction"][0]
-          state["MatrixInstN"] = state["MatrixInstruction"][1]
-          state["MatrixInstK"] = state["MatrixInstruction"][2]
-          state["MatrixInstB"] = state["MatrixInstruction"][3]
+          state["MatrixInstM"]  = state["MatrixInstruction"][0]
+          state["MatrixInstN"]  = state["MatrixInstruction"][1]
+          state["MatrixInstK"]  = state["MatrixInstruction"][2]
+          state["MatrixInstB"]  = state["MatrixInstruction"][3]
+        if len(state["MatrixInstruction"]) == 6:
+          state["MatrixInstBM"] = state["MatrixInstruction"][4]
+          state["MatrixInstBN"] = state["MatrixInstruction"][5]
       if not state["ProblemType"]["HighPrecisionAccumulate"] and \
          not state["ProblemType"]["DataType"].isSingle() :
         reject(state, "Matrix instructions for half types are natively accumulated" + \
@@ -1669,28 +1669,11 @@ class Solution:
       if state["ThreadTile"][0] > 16 or state["ThreadTile"][1] > 16:
         reject(state, "Invalid value for ThreadTile")
 
-    if state["MatrixInstruction"]:
-      if (globalParameters["WavefrontWidth"] % (state["MatrixInstM"] * state["MatrixInstB"]) != 0):
-        reject(state, "Error calcualting InstSplit")
-      state["InstSplit"] = globalParameters["WavefrontWidth"] // (state["MatrixInstM"] * state["MatrixInstB"]) # BBlocks
-      state["MIWG0"] = state["MatrixInstM"] if state["WorkGroup"][0] < state["MatrixInstM"] else  state["WorkGroup"][0]
-      # raise rejection 
-      if ((state["MIWG0"]%state["MatrixInstM"]) != 0):
-        reject(state, "WorkGroup0 must be mulitple of MatrixInstM")
-      #if (state["WorkGroup"][0] * state["WorkGroup"][1]) % (state["MatrixInstM"] * state["InstSplit"]) != 0: # TODO rejection for ABlocks
-      #  reject(state, "Error calculating MIWG1")
+    state["SubGroup0"] = state["WorkGroup"][0]
+    state["SubGroup1"] = state["WorkGroup"][1]
 
-      state["MIWG1"] = (state["WorkGroup"][0] * state["WorkGroup"][1]) // (state["MIWG0"] * state["InstSplit"]) # BBlocks - if no prefetchglobalread, multiply denominator by 4
-      state["SubGroup0"] = state["MIWG0"] # TODO calc
-      state["SubGroup1"] = state["MIWG1"]
-      state["LocalSplitU"] = state["WorkGroup"][2]
-      state["NumThreads"] = state["WorkGroup"][0] * state["WorkGroup"][1] * state["LocalSplitU"] # TODO probably fix for LDS
-    else:
-      state["SubGroup0"] = state["WorkGroup"][0]
-      state["SubGroup1"] = state["WorkGroup"][1]
-
-      state["LocalSplitU"] = state["WorkGroup"][2]
-      state["NumThreads"] = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
+    state["LocalSplitU"] = state["WorkGroup"][2]
+    state["NumThreads"] = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
 
     state["ThreadTile0"] = state["ThreadTile"][0]
     state["ThreadTile1"] = state["ThreadTile"][1]
@@ -1765,10 +1748,6 @@ class Solution:
     # NumLoads is NOT used on the fractional path
     # NumLoads is number of vector loads per-thread
     state["NumLoads%s"%tc] = totalVectors * pv // state["NumThreads"]
-    #if state["MatrixInstruction"] and not state["PrefetchGlobalRead"]:
-    #  state["NumLoads%s"%tc] = totalVectors * pv // (state["NumThreads"] // 4)  # 4 simds/cu
-    #print "result: ", pvar(state, "GlobalLoadVectorWidth%s"%tc), \
-    #        pvar(state, "NumLoads%s"%tc)
 
     return validDepthU
 

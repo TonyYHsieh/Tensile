@@ -37,6 +37,7 @@ from .BenchmarkStructs import BenchmarkProcess
 from .ClientWriter import runClient, writeClientParameters, writeClientConfig
 from .Common import globalParameters, HR, pushWorkingPath, popWorkingPath, print1, print2, printExit, printWarning, ensurePath, startTime, ProgressBar
 from .KernelWriterAssembly import KernelWriterAssembly
+from .KernelWriterMFMAAssembly import KernelWriterMFMAAssembly
 from .KernelWriterSource import KernelWriterSource
 from .SolutionStructs import Solution, ProblemType
 from .SolutionWriter import SolutionWriter
@@ -510,7 +511,7 @@ def writeBenchmarkFiles(stepBaseDir, solutions, problemSizes, stepName, filesToC
       kernelMinNaming, kernelSerialNaming)
   kernelWriterSource = KernelWriterSource( \
       kernelMinNaming, kernelSerialNaming)
-  kernelWriterAssembly = KernelWriterAssembly( \
+  kernelWriterAssembly = KernelWriterMFMAAssembly( \
       kernelMinNaming, kernelSerialNaming)
 
   # write solution, kernels and CMake
