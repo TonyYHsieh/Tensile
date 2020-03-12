@@ -229,11 +229,16 @@ for i in validMacroTileSides:
     validMacroTiles.append([i, j])
 
 validMFMA = {}
-validMFMA["H"] = [[32,32,4,2], [32,32,8,1], [16,16,4,4], [16,16,16,1], [4,4,4,16]]
-validMFMA["S"] = [[32,32,1,2], [32,32,2,1], [16,16,1,4], [16,16,4,1], [4,4,1,16]]
+validMFMA["H"] = [[32,32, 4, 2], [32,32,8,1], [16,16,4,4], [16,16,16,1], [4,4,4,16]]
+validMFMA["S"] = [[32,32, 2, 1, 1, 1], [32,32, 1, 2, 2, 1], [32,32, 1, 2, 1, 2], \
+                  [16,16, 4, 1, 1, 1], [16,16, 1, 4, 4, 1], [16,16, 1, 4, 2, 2], [16,16, 1, 4, 1, 4], \
+                  [ 4, 4,16, 1, 1, 1], [ 4, 4, 1,16,16, 1], [ 4, 4, 1,16, 8, 2], [ 4, 4, 1,16, 4, 4], [ 4, 4, 1,16, 2, 8], [ 4, 4, 1,16, 1,16]]
+
 validMFMA["B"] = [[32,32,2,2], [32,32,4,1], [16,16,2,4], [16,16,8,1], [4,4,2,16]]
 validMFMA["4xi8"] = [[32,32,4,2], [32,32,8,1], [16,16,4,4], [16,16,16,1], [4,4,4,16]]
 validMatrixInstructions = [[], [-1]] + validMFMA["H"] + validMFMA["S"] + validMFMA["B"] + validMFMA["4xi8"]
+validMIWaveGroups = [[], [-1], [1,1], [2,1], [1,2], [1,4], [2,2], [4, 1]]
+validMIWaveTiles  = [[], [-1], [1,1], [2,1], [1,2], [1,4], [2,2], [4, 1]]
 
 validParameters = {
     "LoopDoWhile":                [ False, True ], # Source. True=DoWhile, False=For loop
@@ -576,6 +581,9 @@ validParameters = {
     # If empty, do not use these instructions
     "MatrixInstruction":          validMatrixInstructions,
 
+    "MIWaveGroup":                validMIWaveGroups,
+    "MIWaveTile":                 validMIWaveTiles,
+
     # If positive, each switch includes switches <= the specified switch.
     # For example 3 will enable NoPostLoop+NoGlobalRead+NoLocalWrite
     # If negative, setting is precise and will disable only the specified code piece.
@@ -835,6 +843,8 @@ defaultBenchmarkCommonParameters = [
     {"WorkGroupMapping":          [ 8 ] },
     {"ThreadTile":                [ [4,4] ] },
     {"MatrixInstruction":         [ [] ] },
+    {"MIWaveGroup":               [ [] ] },
+    {"MIWaveTile":                [ [] ] },
     {"DisableAtomicFail":         [ 0 ] },
     {"DisableKernelPieces":       [ 0 ] },
     {"DepthU":                    [ -1 ] },
