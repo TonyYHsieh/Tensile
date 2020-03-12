@@ -330,12 +330,10 @@ def getMaxSolutionSizes(solutions, solutionSummationSizes):
   maxK = max(solutionSummationSizes)
   maxMT0 = 0
   maxMT1 = 0
-  for solution in solutions:
 
-    wg = solution["WorkGroup"]
-    tt = solution["ThreadTile"]
-    mt0 = wg[0] * tt[0]
-    mt1 = wg[1] * tt[1]
+  for solution in solutions:
+    mt0 = solution["SubGroup0"] * solution["ThreadTile0"]
+    mt1 = solution["SubGroup1"] * solution["ThreadTile1"]
 
     if (mt0 > maxMT0):
       maxMT0 = mt0
@@ -1018,14 +1016,16 @@ def writeClientParameters(forBenchmark, solutions, problemSizes, stepName, \
     for i in range(0, len(solutions)):
       solution = solutions[i]
 
-      wg = solution["WorkGroup"]
-      tt = solution["ThreadTile"]
-      mt0 = wg[0] * tt[0]
-      mt1 = wg[1] * tt[1]
+      mt0 = solution["SubGroup0"] * solution["ThreadTile0"]
+      mt1 = solution["SubGroup1"] * solution["ThreadTile1"]
+      tt0 = solution["ThreadTile0"]
+      tt1 = solution["ThreadTile1"]
+      sg0 = solution["SubGroup0"]
+      sg1 = solution["SubGroup1"]
       gsu = solution["GlobalSplitU"]
-      lsu = wg[2]
+      lsu = solution["LocalSplitU"]
 
-      h += "  {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d}" % (mt0,mt1,tt[0],tt[1],wg[0],wg[1],transA,transB,gsu,lsu)
+      h += "  {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d}" % (mt0, mt1, tt0, tt1, sg0, sg1, transA, transB, gsu, lsu)
 
       if (i < len(solutions) - 1):
         h += ",\n"

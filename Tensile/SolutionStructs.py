@@ -1670,14 +1670,23 @@ class Solution:
       if state["ThreadTile"][0] > 16 or state["ThreadTile"][1] > 16:
         reject(state, "Invalid value for ThreadTile")
 
-    state["SubGroup0"]   = state["WorkGroup"][0]
-    state["SubGroup1"]   = state["WorkGroup"][1]
+    if state["MatrixInstruction"]:
+      state["ThreadTile0"] = state["MatrixInstBM"] * state["MIWaveTile"][0] * (state["MatrixInstM"] * state["MatrixInstN"] // globalParameters["WavefrontWidth"])
+      state["ThreadTile1"] = state["MatrixInstBN"] * state["MIWaveTile"][1]
+
+      state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
+      state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
+
+    else:
+      state["ThreadTile0"] = state["ThreadTile"][0]
+      state["ThreadTile1"] = state["ThreadTile"][1]
+
+      state["SubGroup0"]   = state["WorkGroup"][0]
+      state["SubGroup1"]   = state["WorkGroup"][1]
 
     state["LocalSplitU"] = state["WorkGroup"][2]
     state["NumThreads"]  = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
 
-    state["ThreadTile0"] = state["ThreadTile"][0]
-    state["ThreadTile1"] = state["ThreadTile"][1]
 
     # TODO MI - SubGroup0 temporarily == MIWG0, revisit later
     # macro tile sizes
