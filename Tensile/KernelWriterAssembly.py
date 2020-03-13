@@ -4961,14 +4961,18 @@ class KernelWriterAssembly(KernelWriter):
 
     # get constant parameter
     dividendReg   = "Serial" # local serial
-    MIBShape0      = kernel["MatrixInstN"] * kernel["MatrixInstBN"] # matrix instruction MN shape for M
     dividendForK   = kernel["MatrixInstN"] * kernel["MatrixInstB"]
     inputPerThread = kernel["MatrixInstN"] * kernel["MatrixInstK"] * kernel["MatrixInstB"] // globalParameters["WavefrontWidth"]
     strideForK     = (kernel["MacroTile1"] + kernel["LdsPadB"]) * inputPerThread
 
     # thread offset
     kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
-    kStr += vectorStaticRemainder(dummy, tReg, kReg, MIBShape0, tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, tReg, kReg, kernel["MatrixInstN"], tmpVgpr, tmpSgpr)
+    kStr += vectorStaticDivide(wReg, kReg, (kernel["MatrixInstN"] * kernel["MatrixInstBM"]), tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, wReg, wReg, kernel["MatrixInstBN"], tmpVgpr, tmpSgpr)
+    kStr += inst("v_mul_lo_u32", vgpr(wReg), hex(kernel["MatrixInstN"]), vgpr(wReg), "BN offset = bn_idx * MatrixInstN")
+    kStr += inst("v_add_u32", vgpr(tReg), vgpr(wReg), vgpr(tReg), "")
+
     kStr += vectorStaticDivide(kReg, kReg, dividendForK, tmpVgpr, tmpSgpr)
     kStr += inst("s_mov_b32", sgpr(tmpSgpr), hex(strideForK), "(MT1+PAD)*(number of inputs per thread)")
     kStr += inst("v_mul_lo_u32", vgpr(kReg), sgpr(tmpSgpr), vgpr(kReg), "k offset = k_idx * (MT1+PAD)")
