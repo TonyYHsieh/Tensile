@@ -1271,7 +1271,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
         kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, -1, -1, 0, "4wait for local read"))
       if self.enable["MAC"]:
         if kernel["MatrixInstruction"]:
-          kl.append(self.mfmaIter(kernel, 0, tailLoopInnerUnroll))
+          kl.append(self.mfmaIter(kernel, 0, tailLoopInnerUnroll, True))
         else:
           kl.append(self.macIter(kernel, 0, tailLoopInnerUnroll, True))
 

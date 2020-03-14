@@ -1255,10 +1255,12 @@ class KernelWriterAssembly(KernelWriter):
     self.numVgprValuC = (kernel["ThreadTile0"]*kernel["ThreadTile1"]*self.bpeCinternal)//self.bpr
 
     valuBlocks = (1+kernel["PrefetchLocalRead"]) * kernel["InnerUnroll"]
+
     if kernel["MatrixInstruction"]:
       # NOTE: ThreadTileA/B in MatrixInstruction context is a bit ambiguous 
-      self.numVgprValuAPerBlock = kernel["ThreadTileA"]*tPA["bpe"] * kernel["VectorWidth"]//self.bpr
-      self.numVgprValuBPerBlock = (kernel["ThreadTileB"] * tPA["bpe"] * kernel["VectorWidth"]) // (kernel["MatrixInstN"] * self.bpr) # ABlocks
+      self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * tPA["bpe"] // self.bpr
+      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * tPA["bpe"] // self.bpr # ABlocks
+
       if kernel["ProblemType"]["DataType"].isHalf(): # MI for fp16 requires 2x vgprs
         self.numVgprValuAPerBlock *= 2
         self.numVgprValuBPerBlock *= 2
@@ -1349,27 +1351,31 @@ class KernelWriterAssembly(KernelWriter):
     ####################################
     vgprIdx = 0
 
-    self.startVgprValuC = vgprIdx; vgprIdx += self.numVgprValuC
+    self.startVgprValuC = vgprIdx;
+    vgprIdx += self.numVgprValuC
 
-    self.startVgprValuA = vgprIdx; vgprIdx += numVgprValuA
+    self.startVgprValuA = vgprIdx;
+    vgprIdx += numVgprValuA
 
     valuBlocks = (1+kernel["PrefetchLocalRead"]) * kernel["InnerUnroll"]
     if not kernel["DirectToLdsA"] or self.do["KeepDirectToLdsAlloc"]:
       if kernel["PrefetchGlobalRead"]:
-        self.startVgprG2LA = vgprIdx; vgprIdx += self.numVgprG2LA
+        self.startVgprG2LA = vgprIdx;
+        vgprIdx += self.numVgprG2LA
       else: # g2l can overlap valu
         self.startVgprG2LA = self.startVgprValuA
-        vgprIdx = self.startVgprValuA \
-            + max(self.numVgprValuAPerBlock*valuBlocks, self.numVgprG2LA)
+        vgprIdx = self.startVgprValuA + max(self.numVgprValuAPerBlock*valuBlocks, self.numVgprG2LA)
 
-    self.startVgprValuB = vgprIdx; vgprIdx += numVgprValuB
+    self.startVgprValuB = vgprIdx;
+    vgprIdx += numVgprValuB
+
     if not kernel["DirectToLdsB"] or self.do["KeepDirectToLdsAlloc"]:
       if kernel["PrefetchGlobalRead"]:
-        self.startVgprG2LB = vgprIdx; vgprIdx += self.numVgprG2LB
+        self.startVgprG2LB = vgprIdx;
+        vgprIdx += self.numVgprG2LB
       else: # g2l can overlap valu
         self.startVgprG2LB = self.startVgprValuB
-        vgprIdx = self.startVgprValuB \
-            + max(self.numVgprValuBPerBlock*valuBlocks, self.numVgprG2LB)
+        vgprIdx = self.startVgprValuB + max(self.numVgprValuBPerBlock*valuBlocks, self.numVgprG2LB)
 
     # Registers allocated above this point can be used as temps during setup
     # Registers above here are reserved in initC, near the end of the setup
@@ -5458,8 +5464,6 @@ class KernelWriterAssembly(KernelWriter):
         kStr += "//numIter%s = ((numIter%s + MatrixInst%s - 1) / MatrixInst%s)\n"%(self.unrollChar, self.unrollChar, self.unrollChar, self.unrollChar)
         if numRemainderSumElements: 
           kStr += scalarStaticDivideAndRemainder(None, numRemainderSumElements, loopCounter, kernel["MatrixInstK"], tmpSgpr+2, 2)
-        kStr += inst("s_add_u32", loopCounter, loopCounter, kernel["MatrixInstK"]-1, "")
-        kStr += scalarStaticDivideAndRemainder(loopCounterName, None, loopCounterName, kernel["MatrixInstK"], tmpSgpr+2, 0)
 
       if kernel["LocalSplitU"] > 1:
         # (size % DepthU) + LSU - 1
@@ -5710,10 +5714,13 @@ class KernelWriterAssembly(KernelWriter):
         loopCounter = "TailLoopCounter"
       else:
         loopCounter = self.loopCounter(kernel, loopIdx)
-      if kernel["AssertSummationElementMultiple"]%kernel["InnerUnroll"]==0:
-        unrollInc = kernel["InnerUnroll"]
-      else:
-        unrollInc = 1
+
+      unrollInc = 1
+      if kernel["AssertSummationElementMultiple"] % kernel["InnerUnroll"] == 0:
+        unrollInc *= kernel["InnerUnroll"]
+      if kernel["MatrixInstruction"]:
+        unrollInc *= kernel["MatrixInstK"]
+
       kStr += self.comment("closeLoop loop%s finalLoop=%d tailLoop=%d" % (loopChar, finalLoop, tailLoop))
 
       kStr += inst("s_sub_u32", \
@@ -5730,7 +5737,7 @@ class KernelWriterAssembly(KernelWriter):
         "inc counter%s"%(loopChar) )
 
       endCounter = 0
-      kStr += inst("s_cmp_eq_i32", \
+      kStr += inst("s_cmp_le_i32", \
           loopCounter, \
           hex(endCounter), \
         "counter%s==%d"%(loopChar,endCounter) )
@@ -5883,11 +5890,38 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   # MFMA Iteration
   ##############################################################################
-  def mfmaIter(self, kernel, m, innerUnroll):
+  def mfmaIter(self, kernel, m, innerUnroll, tail=False):
 
     kStr = ""
 
+    # alloc vgpr
+    tReg    = self.vgprPool.checkOut(1,"tReg") # remainder
+    tmpVgpr = self.vgprPool.checkOut(2,"tmpVgpr")
+    dummy   = self.vgprPool.checkOut(1,"dummy")
+
+    # alloc sgpr
+    tmpSgpr = self.getTmpSgpr(2)
+
+    loopCounterName = self.loopCounterName(kernel, self.unrollIdx)
     accs_per_wave   = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
+
+    # handle multiple K element in MFMA instruction
+    if tail and kernel["MatrixInstK"] > 1:
+      kStr += vectorStaticDivide(tReg, "Serial", kernel["MatrixInstN"], tmpVgpr, tmpSgpr)
+      kStr += vectorStaticRemainder(dummy, tReg, tReg, kernel["MatrixInstK"], tmpVgpr, tmpSgpr)
+      kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(tReg), sgpr(loopCounterName), "check K index < Size L")
+
+      for a in range(0, kernel["MIWaveTile"][0]):
+        for iui in range(0, innerUnroll):
+          aStr  = vgpr("ValuA_X%u_I%u+%u" % (m, iui, a), 1)
+          kStr += inst("v_cndmask_b32", aStr, aStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
+
+      for b in range(0, kernel["MIWaveTile"][1]):
+        for iui in range(0, innerUnroll):
+          bStr  = vgpr("ValuB_X%u_I%u+%u" % (m, iui, b), 1)
+          kStr += inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
+
+      kStr += "s_nop 0\n"
 
     for b in range(0, kernel["MIWaveTile"][1]):
       for a in range(0, kernel["MIWaveTile"][0]):
@@ -5900,6 +5934,12 @@ class KernelWriterAssembly(KernelWriter):
           kStr    += "v_mfma_f32_%ux%ux%u%s a[%u:%u], %s, %s, a[%u:%u]%s" \
                      % (kernel["MatrixInstM"], kernel["MatrixInstN"], kernel["MatrixInstK"], kernel["ProblemType"]["DataType"].toNameAbbrev(),
                         accStart, accEnd, aStr, bStr, accStart, accEnd, self.endLine)
+
+    # release register
+    self.vgprPool.checkIn(tReg)
+    self.vgprPool.checkIn(tmpVgpr)
+    self.vgprPool.checkIn(dummy)
+
     return kStr
 
 
