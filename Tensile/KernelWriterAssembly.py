@@ -4669,18 +4669,18 @@ class KernelWriterAssembly(KernelWriter):
     dotInterleave = kernel["LocalDotLayout"]
 
     if dotInterleave == 1:
-      kStr += inst("v_mul_u32_u24", \
-          vgpr(destVgpr), \
-          hex(kernel["MacroTile%s"%tP["tensorChar"]] + kernel["LdsPad%s"%tc]), \
-          vgpr(uReg), \
-          "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
-      kStr += inst("_v_add_lshl_u32", \
-          vgpr(destVgpr), \
-          vgpr(tP["gpr"]["lwoT"]), \
-          vgpr(destVgpr), \
-          hex(log2(tP["bpe"])), \
-          "lwFO%s = (lw%s%s + lw%s%s*(MT%s+PAD))*bpe" \
-          % (tc, tc, tc, tc, self.unrollChar, tP["tileChar"]) )
+      if kernel["MatrixInstruction"] and kernel["LdsTranpose"]:
+        lds_stride = kernel["DepthU"] + kernel["LdsPad%s"%tc]
+        kStr += inst("v_mul_u32_u24", vgpr(destVgpr), hex(lds_stride), vgpr(tP["gpr"]["lwoT"]), \
+            "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
+        kStr += inst("_v_add_lshl_u32", vgpr(destVgpr), vgpr(uReg), vgpr(destVgpr), hex(log2(tP["bpe"])), \
+            "lwFO%s = (lw%s%s + lw%s%s*(MT%s+PAD))*bpe" % (tc, tc, tc, tc, self.unrollChar, tP["tileChar"]) )
+      else:
+        lds_stride = kernel["MacroTile%s"%tP["tensorChar"]] + kernel["LdsPad%s"%tc]
+        kStr += inst("v_mul_u32_u24", vgpr(destVgpr), hex(lds_stride), vgpr(uReg), \
+            "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
+        kStr += inst("_v_add_lshl_u32", vgpr(destVgpr), vgpr(tP["gpr"]["lwoT"]), vgpr(destVgpr), hex(log2(tP["bpe"])), \
+            "lwFO%s = (lw%s%s + lw%s%s*(MT%s+PAD))*bpe" % (tc, tc, tc, tc, self.unrollChar, tP["tileChar"]) )
     else:
       ldlOffsetVgpr = self.vgprPool.checkOut(1, "ldlOffsetVgpr", self.preventVgprOverflowDuringNewTile)
       uRegScrap = self.vgprPool.checkOut(1, "uRegScrap", self.preventVgprOverflowDuringNewTile)
@@ -4876,14 +4876,23 @@ class KernelWriterAssembly(KernelWriter):
     MIBShape0      = kernel["MatrixInstM"] * kernel["MatrixInstBM"] # matrix instruction MN shape for M
     dividendForK   = kernel["MatrixInstM"] * kernel["MatrixInstB"]
     inputPerThread = kernel["MatrixInstM"] * kernel["MatrixInstK"] * kernel["MatrixInstB"] // globalParameters["WavefrontWidth"]
-    strideForK     = (kernel["MacroTile0"] + kernel["LdsPadA"]) * inputPerThread
+    strideM        = 1
+    strideK        = (kernel["MacroTile0"] + kernel["LdsPadA"]) * inputPerThread
+    strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBM"]
+
+    # adjust stride according to buffer dimension
+    if kernel["LdsTranpose"]:
+      strideM    = kernel["DepthU"] + kernel["LdsPadA"]
+      strideK    = inputPerThread
+      strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBM"] * (kernel["DepthU"] + kernel["LdsPadA"])
 
     # thread offset
     kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
     kStr += vectorStaticRemainder(dummy, tReg, kReg, MIBShape0, tmpVgpr, tmpSgpr)
+    kStr += staticMultiply(vgpr(tReg), vgpr(tReg), strideM, sgpr(tmpSgpr))
+
     kStr += vectorStaticDivide(kReg, kReg, dividendForK, tmpVgpr, tmpSgpr)
-    kStr += inst("s_mov_b32", sgpr(tmpSgpr), hex(strideForK), "(MT0+PAD)*(number of inputs per thread)")
-    kStr += inst("v_mul_lo_u32", vgpr(kReg), sgpr(tmpSgpr), vgpr(kReg), "k offset = k_idx * (MT0+PAD)")
+    kStr += staticMultiply(vgpr(kReg), vgpr(kReg), strideK, sgpr(tmpSgpr))
     kStr += inst("v_add_u32", vgpr(tReg), vgpr(kReg), vgpr(tReg), "")
 
     # wave offset
@@ -4891,7 +4900,7 @@ class KernelWriterAssembly(KernelWriter):
     # if kernel["MIWaveGroup"][0] > 1:
       kStr += vectorStaticDivide(wReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
       kStr += vectorStaticRemainder(dummy, wReg, wReg, kernel["MIWaveGroup"][0], tmpVgpr, tmpSgpr)
-      kStr += inst("v_lshlrev_b32", vgpr(wReg), hex(log2(kernel["MatrixInstM"] * kernel["MatrixInstBM"])), vgpr(wReg), "wave offset in m dimension")
+      kStr += staticMultiply(vgpr(wReg), vgpr(wReg), strideWave, sgpr(tmpSgpr))
       kStr += inst("v_add_u32", vgpr(tReg), vgpr(wReg), vgpr(tReg), "")
 
     # release register
@@ -4966,22 +4975,33 @@ class KernelWriterAssembly(KernelWriter):
     tmpSgpr = self.getTmpSgpr(1)
 
     # get constant parameter
-    dividendReg   = "Serial" # local serial
+    dividendReg    = "Serial" # local serial
     dividendForK   = kernel["MatrixInstN"] * kernel["MatrixInstB"]
     inputPerThread = kernel["MatrixInstN"] * kernel["MatrixInstK"] * kernel["MatrixInstB"] // globalParameters["WavefrontWidth"]
-    strideForK     = (kernel["MacroTile1"] + kernel["LdsPadB"]) * inputPerThread
+    strideN        = 1
+    strideK        = (kernel["MacroTile1"] + kernel["LdsPadB"]) * inputPerThread
+    strideBN       =  kernel["MatrixInstN"]
+    strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBN"]
+
+    if kernel["LdsTranpose"]:
+      strideN    = kernel["DepthU"] + kernel["LdsPadB"]
+      strideK    = inputPerThread
+      strideBN   = kernel["MatrixInstN"] * (kernel["DepthU"] + kernel["LdsPadB"])
+      strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBN"] * (kernel["DepthU"] + kernel["LdsPadB"])
+
 
     # thread offset
     kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
     kStr += vectorStaticRemainder(dummy, tReg, kReg, kernel["MatrixInstN"], tmpVgpr, tmpSgpr)
+    kStr += staticMultiply(vgpr(tReg), vgpr(tReg), strideN, sgpr(tmpSgpr))
+
     kStr += vectorStaticDivide(wReg, kReg, (kernel["MatrixInstN"] * kernel["MatrixInstBM"]), tmpVgpr, tmpSgpr)
     kStr += vectorStaticRemainder(dummy, wReg, wReg, kernel["MatrixInstBN"], tmpVgpr, tmpSgpr)
-    kStr += inst("v_mul_lo_u32", vgpr(wReg), hex(kernel["MatrixInstN"]), vgpr(wReg), "BN offset = bn_idx * MatrixInstN")
+    kStr += staticMultiply(vgpr(wReg), vgpr(wReg), strideBN, sgpr(tmpSgpr))
     kStr += inst("v_add_u32", vgpr(tReg), vgpr(wReg), vgpr(tReg), "")
 
     kStr += vectorStaticDivide(kReg, kReg, dividendForK, tmpVgpr, tmpSgpr)
-    kStr += inst("s_mov_b32", sgpr(tmpSgpr), hex(strideForK), "(MT1+PAD)*(number of inputs per thread)")
-    kStr += inst("v_mul_lo_u32", vgpr(kReg), sgpr(tmpSgpr), vgpr(kReg), "k offset = k_idx * (MT1+PAD)")
+    kStr += staticMultiply(vgpr(kReg), vgpr(kReg), strideK, sgpr(tmpSgpr))
     kStr += inst("v_add_u32", vgpr(tReg), vgpr(kReg), vgpr(tReg), "")
 
     # wave offset
@@ -4989,7 +5009,7 @@ class KernelWriterAssembly(KernelWriter):
     # if kernel["MIWaveGroup"][0] > 1:
       kStr += vectorStaticDivide(wReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
       kStr += vectorStaticDivide(wReg, wReg, kernel["MIWaveGroup"][0], tmpVgpr, tmpSgpr)
-      kStr += inst("v_lshlrev_b32", vgpr(wReg), hex(log2(kernel["MatrixInstM"] * kernel["MatrixInstBN"])), vgpr(wReg), "wave offset in m dimension")
+      kStr += staticMultiply(vgpr(wReg), vgpr(wReg), strideWave, sgpr(tmpSgpr))
       kStr += inst("v_add_u32", vgpr(tReg), vgpr(wReg), vgpr(tReg), "")
 
     # release register
@@ -7160,12 +7180,21 @@ class KernelWriterAssembly(KernelWriter):
     # print("0lspaOffset", lspaOffset)
     # print("0lscaOffset", lscaOffset)
 
-    if tP["tlu"]:
-      lspaOffset *= (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
-      lspaOffset += rem * ldl + perp_rem
+    if kernel["LdsTranpose"]:
+      if tP["tlu"]:
+        lscaOffset *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
+        lscaOffset += rem
+      else:
+        lspaOffset *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
+        lspaOffset += rem * ldl + perp_rem
     else:
-      lscaOffset *= (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
-      lscaOffset += rem
+      if tP["tlu"]:
+        lspaOffset *= (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
+        lspaOffset += rem * ldl + perp_rem
+      else:
+        lscaOffset *= (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
+        lscaOffset += rem
+
     # print("1lspaOffset", lspaOffset)
     # print("1lscaOffset", lscaOffset)
     #if tP["tlu"] == tP["grcv"]:
@@ -7403,6 +7432,8 @@ class KernelWriterAssembly(KernelWriter):
     if self.inTailLoop:
       inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * tP["bpe"]
       if kernel["MatrixInstruction"]:
+        if kernel["LdsTranpose"]:
+          inc = kernel["LocalSplitU"] * tP["bpe"]
         inc *= kernel["MatrixInstK"]
       tmpSgpr = self.getTmpSgpr(1)
       kStr += inst("s_mov_b32", sgpr(tmpSgpr), hex(inc), "inc")
@@ -7415,7 +7446,10 @@ class KernelWriterAssembly(KernelWriter):
     else:
       if tP["localReadInstruction"].numOffsets == 1:
         if kernel["MatrixInstruction"]:
-          tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * kernel["MatrixInstK"]
+          if kernel["LdsTranpose"]:
+            tP["localReadOffset"] += kernel["LocalSplitU"] * kernel["MatrixInstK"]
+          else:
+            tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * kernel["MatrixInstK"]
         else:
           tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc])
         kStr += self.comment1("N/A, lro->%d" % tP["localReadOffset"])
@@ -7545,7 +7579,10 @@ class KernelWriterAssembly(KernelWriter):
         paramList.append(vgpr("LocalReadAddr%s"%tc))
 
         for oIdx in range(0, numOffsets):
-          offset_val = rIdx * blockWidth + ((vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx]) + tP["localReadOffset"]
+          offset_val = (vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx]
+          if kernel["LdsTranpose"]:
+            offset_val *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
+          offset_val = rIdx * blockWidth + offset_val + tP["localReadOffset"]
           offset_val = offset_val * tP["bpe"] + tP["localReadSwapByteOffset"]
           paramList.append(offset_val)
 
