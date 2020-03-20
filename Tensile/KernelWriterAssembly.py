@@ -7156,8 +7156,11 @@ class KernelWriterAssembly(KernelWriter):
 
     # Add component offset to interleave from different regs
     # and compute mysterious "i"
-    assert(sPerp==0 or sPara==0)  
-    if tP["tlu"]:
+    assert(sPerp==0 or sPara==0)
+
+    useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
+
+    if tP["tlu"] == useNormalLDS:
       lspaOffset += sPerp & mask
       lscaOffset += sPara
       rem = (sPerp & ~mask) >> log2(ldl)
@@ -7180,20 +7183,15 @@ class KernelWriterAssembly(KernelWriter):
     # print("0lspaOffset", lspaOffset)
     # print("0lscaOffset", lscaOffset)
 
-    if kernel["LdsTranpose"]:
-      if tP["tlu"]:
-        lscaOffset *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
-        lscaOffset += rem
-      else:
-        lspaOffset *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
-        lspaOffset += rem * ldl + perp_rem
+    lds_stride = (kernel["DepthU"] + kernel["LdsPad%s"%tc]) if kernel["LdsTranpose"] \
+            else (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
+
+    if tP["tlu"] == useNormalLDS:
+      lspaOffset *= lds_stride
+      lspaOffset += rem * ldl + perp_rem
     else:
-      if tP["tlu"]:
-        lspaOffset *= (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
-        lspaOffset += rem * ldl + perp_rem
-      else:
-        lscaOffset *= (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
-        lscaOffset += rem
+      lscaOffset *= lds_stride
+      lscaOffset += rem
 
     # print("1lspaOffset", lspaOffset)
     # print("1lscaOffset", lscaOffset)
@@ -7293,10 +7291,11 @@ class KernelWriterAssembly(KernelWriter):
           if para>=1:
             localWriteCode = imod.addCode(Code.Module("LocalWrite%u perp=%d para=%d"%(instructionCnt,perp,para)))
           for s in range(0, max(tP["nwcv"],tP["nwpv"])//tP["nwcvpi"]):
-
+            useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
             sPerp = 0
             sPara = 0
-            if tP["tlu"]:
+
+            if tP["tlu"] == useNormalLDS:
               if tP["wtc"] == tP["grcv"]:
                 sPerp = s
               elif tP["wuc"] == tP["grcv"]:
@@ -7306,6 +7305,7 @@ class KernelWriterAssembly(KernelWriter):
                 sPara = s
               elif tP["wuc"] == tP["grcv"]:
                 sPerp = s
+
             # print("perp:{0} para:{1} sPerp:{2} sPara:{3} loopCnt:{4}".format(perp,para,sPerp,sPara,loopCnt))
             (offset, i, comment) = self.calculateLdsWriteOffset(perp, para, sPerp, sPara, kernel, tP, loopCnt)
             # print("offset: %u"%(offset))

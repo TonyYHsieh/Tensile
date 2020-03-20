@@ -1576,12 +1576,11 @@ class KernelWriter(metaclass=abc.ABCMeta):
     vwb = kernel["GlobalLoadVectorWidthB"]
 
     ########################################
-    # read / write vectors or vector components
+    # read vectors or vector components
     ########################################
     if kernel["ProblemType"]["TLUA"]: # NT no transpose
       self.numReadsTileA = kernel["NumLoadsCoalescedA"]
       self.numReadsUnrollA = kernel["NumLoadsPerpendicularA"]
-      self.numWritesCoalA = kernel["NumLoadsCoalescedA"]
       if kernel["GlobalReadCoalesceVectorA"]: # read vectors, write vectors
         self.readTileDimComponentsA = False # Vector
         self.readTileDimVectorA = True # Vector
@@ -1589,7 +1588,39 @@ class KernelWriter(metaclass=abc.ABCMeta):
         self.readUnrollDimVectorA = False # Scalar
         self.numReadsTileVecCompA = vwa
         self.numReadsUnrollVecCompA = 1
+      else: # read components, write components
+        self.readTileDimComponentsA = False # Scalar
+        self.readTileDimVectorA = False # Scalar
+        self.readUnrollDimComponentsA = kernel["VectorWidth"] > 1 # Components
+        self.readUnrollDimVectorA = False # Components
+        self.numReadsTileVecCompA = 1
+        self.numReadsUnrollVecCompA = vwa
+    else: # TN yes transpose
+      self.numReadsTileA = kernel["NumLoadsPerpendicularA"]
+      self.numReadsUnrollA = kernel["NumLoadsCoalescedA"]
+      if kernel["GlobalReadCoalesceVectorA"]: # read vector, write components
+        self.readTileDimComponentsA = False # Scalar
+        self.readTileDimVectorA = False # Scalar
+        self.readUnrollDimComponentsA = False # Vector
+        self.readUnrollDimVectorA = True # Vector
+        self.numReadsUnrollVecCompA = vwa
+        self.numReadsTileVecCompA = 1
+      else: # read components, write vectors
+        self.readTileDimComponentsA = kernel["VectorWidth"] > 1 # Components
+        self.readTileDimVectorA = False # Components
+        self.readUnrollDimComponentsA = False # Scalar
+        self.readUnrollDimVectorA = False # Scalar
+        # NEW
+        self.numReadsUnrollVecCompA = 1
+        self.numReadsTileVecCompA = vwa
 
+    ########################################
+    # write vectors or vector components
+    ########################################
+    useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
+    if kernel["ProblemType"]["TLUA"] == useNormalLDS: # NT no transpose
+      self.numWritesCoalA = kernel["NumLoadsCoalescedA"]
+      if kernel["GlobalReadCoalesceVectorA"]: # read vectors, write vectors
         self.writeUnrollDimComponentsA = False # Scalar
         if kernel["LocalDotLayout"]>1:
           self.writeTileDimComponentsA = kernel["GlobalReadVectorWidth"] > 1 # Components
@@ -1598,28 +1629,12 @@ class KernelWriter(metaclass=abc.ABCMeta):
           self.writeTileDimComponentsA = False # Vector
           writeCoal = True
       else: # read components, write components
-        self.readTileDimComponentsA = False # Scalar
-        self.readTileDimVectorA = False # Scalar
-        self.readUnrollDimComponentsA = kernel["VectorWidth"] > 1 # Components
-        self.readUnrollDimVectorA = False # Components
-        self.numReadsTileVecCompA = 1
-        self.numReadsUnrollVecCompA = vwa
-
         self.writeTileDimComponentsA = False # Scalar
         self.writeUnrollDimComponentsA = kernel["GlobalReadVectorWidth"] > 1 # Components
         writeCoal = False
     else: # TN yes transpose
-      self.numReadsTileA = kernel["NumLoadsPerpendicularA"]
-      self.numReadsUnrollA = kernel["NumLoadsCoalescedA"]
       self.numWritesCoalA = kernel["NumLoadsPerpendicularA"]
       if kernel["GlobalReadCoalesceVectorA"]: # read vector, write components
-        self.readTileDimComponentsA = False # Scalar
-        self.readTileDimVectorA = False # Scalar
-        self.readUnrollDimComponentsA = False # Vector
-        self.readUnrollDimVectorA = True # Vector
-        self.numReadsUnrollVecCompA = vwa
-        self.numReadsTileVecCompA = 1
-
         self.writeUnrollDimComponentsA = False # Scalar
         if kernel["LocalDotLayout"]>1:
           self.writeTileDimComponentsA = kernel["GlobalReadVectorWidth"] > 1 # Components
@@ -1629,16 +1644,10 @@ class KernelWriter(metaclass=abc.ABCMeta):
           self.writeTileDimComponentsA = kernel["GlobalReadVectorWidth"] > 1 # Components
           writeCoal = False
       else: # read components, write vectors
-        self.readTileDimComponentsA = kernel["VectorWidth"] > 1 # Components
-        self.readTileDimVectorA = False # Components
-        self.readUnrollDimComponentsA = False # Scalar
-        self.readUnrollDimVectorA = False # Scalar
-        # NEW
-        self.numReadsUnrollVecCompA = 1
-        self.numReadsTileVecCompA = vwa
         self.writeTileDimComponentsA = False # Vector
         self.writeUnrollDimComponentsA = False # Scalar
         writeCoal = True
+
 
     # writeCoal indicates writes should be done in the coal dim
     # else in perp
@@ -1658,6 +1667,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
         or self.writeUnrollDimComponentsA) else 1
     self.numReadTileVectorComponentsA = kernel["GlobalLoadVectorWidthA"] \
         if self.readTileDimComponentsA else 1 # for branches
+
     # convert tile/unroll to para/perp
     if kernel["ProblemType"]["TLUA"]:
       self.numReadsCoalVecCompA = self.numReadsTileVecCompA
@@ -1677,12 +1687,11 @@ class KernelWriter(metaclass=abc.ABCMeta):
       self.readPerpendicularVectorA      = self.readTileDimVectorA
 
     ####################################
-    # read / write vectors or vector components b
+    # read vectors or vector components b
     ####################################
     if kernel["ProblemType"]["TLUB"]: # NT no transpose
       self.numReadsTileB = kernel["NumLoadsCoalescedB"]
       self.numReadsUnrollB = kernel["NumLoadsPerpendicularB"]
-      self.numWritesCoalB = kernel["NumLoadsCoalescedB"]
       if kernel["GlobalReadCoalesceVectorB"]:
         self.readTileDimComponentsB = False # Vector
         self.readTileDimVectorB = True # Vector
@@ -1690,6 +1699,40 @@ class KernelWriter(metaclass=abc.ABCMeta):
         self.readUnrollDimVectorB = False # Scalar
         self.numReadsTileVecCompB = vwb
         self.numReadsUnrollVecCompB = 1
+      else:
+        self.readTileDimComponentsB = False # Scalar
+        self.readTileDimVectorB = False # Scalar
+        self.readUnrollDimComponentsB = kernel["VectorWidth"] > 1 # Components
+        self.readUnrollDimVectorB = False # Components
+        # NEW
+        self.numReadsTileVecCompB = 1
+        self.numReadsUnrollVecCompB = vwb
+    else: # TN yes transpose
+      self.numReadsTileB = kernel["NumLoadsPerpendicularB"]
+      self.numReadsUnrollB = kernel["NumLoadsCoalescedB"]
+      if kernel["GlobalReadCoalesceVectorB"]:
+        self.readTileDimComponentsB = False # Scalar
+        self.readTileDimVectorB = False # Scalar
+        self.readUnrollDimComponentsB = False # Vector
+        self.readUnrollDimVectorB = True # Vector
+        self.numReadsUnrollVecCompB = vwb
+        self.numReadsTileVecCompB = 1
+      else:
+        self.readTileDimComponentsB = kernel["VectorWidth"] > 1 # Components
+        self.readTileDimVectorB = False # Components
+        self.readUnrollDimComponentsB = False # Scalar
+        self.readUnrollDimVectorB = False # Scalar
+        # NEW
+        self.numReadsUnrollVecCompB = 1
+        self.numReadsTileVecCompB = vwb
+
+    ####################################
+    # write vectors or vector components b
+    ####################################
+    useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
+    if kernel["ProblemType"]["TLUB"] == useNormalLDS: # NT no transpose
+      self.numWritesCoalB = kernel["NumLoadsCoalescedB"]
+      if kernel["GlobalReadCoalesceVectorB"]:
         self.writeUnrollDimComponentsB = False # Vector
         if kernel["LocalDotLayout"]>1:
           self.writeTileDimComponentsB = kernel["GlobalReadVectorWidth"] > 1 # Components
@@ -1698,28 +1741,14 @@ class KernelWriter(metaclass=abc.ABCMeta):
           self.writeTileDimComponentsB = False # Vector
           writeCoal = True
       else:
-        self.readTileDimComponentsB = False # Scalar
-        self.readTileDimVectorB = False # Scalar
-        self.readUnrollDimComponentsB = kernel["VectorWidth"] > 1 # Components
-        self.readUnrollDimVectorB = False # Components
         self.writeTileDimComponentsB = False # Scalar
         self.writeUnrollDimComponentsB = kernel["GlobalReadVectorWidth"] > 1 # Components
         # NEW
-        self.numReadsTileVecCompB = 1
-        self.numReadsUnrollVecCompB = vwb
         self.numWritesCoalVecCompB = 1
         self.numWritesPerpVecCompB = vwb
     else: # TN yes transpose
-      self.numReadsTileB = kernel["NumLoadsPerpendicularB"]
-      self.numReadsUnrollB = kernel["NumLoadsCoalescedB"]
       self.numWritesCoalB = kernel["NumLoadsPerpendicularB"]
       if kernel["GlobalReadCoalesceVectorB"]:
-        self.readTileDimComponentsB = False # Scalar
-        self.readTileDimVectorB = False # Scalar
-        self.readUnrollDimComponentsB = False # Vector
-        self.readUnrollDimVectorB = True # Vector
-        self.numReadsUnrollVecCompB = vwb
-        self.numReadsTileVecCompB = 1
         self.writeUnrollDimComponentsB = False
         if kernel["LocalDotLayout"]>1:
           self.writeTileDimComponentsB = kernel["GlobalReadVectorWidth"] > 1 # Components
@@ -1729,15 +1758,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
           self.writeTileDimComponentsB = kernel["GlobalReadVectorWidth"] > 1 # Components
           writeCoal = False
       else:
-        self.readTileDimComponentsB = kernel["VectorWidth"] > 1 # Components
-        self.readTileDimVectorB = False # Components
-        self.readUnrollDimComponentsB = False # Scalar
-        self.readUnrollDimVectorB = False # Scalar
         self.writeTileDimComponentsB = False # Vector
         self.writeUnrollDimComponentsB = False # Scalar
         # NEW
-        self.numReadsUnrollVecCompB = 1
-        self.numReadsTileVecCompB = vwb
         self.numWritesCoalVecCompB = vwb
         self.numWritesPerpVecCompB = 1
 
