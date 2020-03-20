@@ -4669,7 +4669,7 @@ class KernelWriterAssembly(KernelWriter):
     dotInterleave = kernel["LocalDotLayout"]
 
     if dotInterleave == 1:
-      if kernel["MatrixInstruction"] and kernel["LdsTranpose"]:
+      if kernel["UnrollMajorLDS"]:
         lds_stride = kernel["DepthU"] + kernel["LdsPad%s"%tc]
         kStr += inst("v_mul_u32_u24", vgpr(destVgpr), hex(lds_stride), vgpr(tP["gpr"]["lwoT"]), \
             "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
@@ -4881,7 +4881,7 @@ class KernelWriterAssembly(KernelWriter):
     strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBM"]
 
     # adjust stride according to buffer dimension
-    if kernel["LdsTranpose"]:
+    if kernel["UnrollMajorLDS"]:
       strideM    = kernel["DepthU"] + kernel["LdsPadA"]
       strideK    = inputPerThread
       strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBM"] * (kernel["DepthU"] + kernel["LdsPadA"])
@@ -4983,7 +4983,7 @@ class KernelWriterAssembly(KernelWriter):
     strideBN       =  kernel["MatrixInstN"]
     strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBN"]
 
-    if kernel["LdsTranpose"]:
+    if kernel["UnrollMajorLDS"]:
       strideN    = kernel["DepthU"] + kernel["LdsPadB"]
       strideK    = inputPerThread
       strideBN   = kernel["MatrixInstN"] * (kernel["DepthU"] + kernel["LdsPadB"])
@@ -7158,9 +7158,7 @@ class KernelWriterAssembly(KernelWriter):
     # and compute mysterious "i"
     assert(sPerp==0 or sPara==0)
 
-    useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
-
-    if tP["tlu"] == useNormalLDS:
+    if tP["tlu"] != kernel["UnrollMajorLDS"]:
       lspaOffset += sPerp & mask
       lscaOffset += sPara
       rem = (sPerp & ~mask) >> log2(ldl)
@@ -7183,10 +7181,10 @@ class KernelWriterAssembly(KernelWriter):
     # print("0lspaOffset", lspaOffset)
     # print("0lscaOffset", lscaOffset)
 
-    lds_stride = (kernel["DepthU"] + kernel["LdsPad%s"%tc]) if kernel["LdsTranpose"] \
+    lds_stride = (kernel["DepthU"] + kernel["LdsPad%s"%tc]) if kernel["UnrollMajorLDS"] \
             else (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
 
-    if tP["tlu"] == useNormalLDS:
+    if tP["tlu"] != kernel["UnrollMajorLDS"]:
       lspaOffset *= lds_stride
       lspaOffset += rem * ldl + perp_rem
     else:
@@ -7291,11 +7289,10 @@ class KernelWriterAssembly(KernelWriter):
           if para>=1:
             localWriteCode = imod.addCode(Code.Module("LocalWrite%u perp=%d para=%d"%(instructionCnt,perp,para)))
           for s in range(0, max(tP["nwcv"],tP["nwpv"])//tP["nwcvpi"]):
-            useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
             sPerp = 0
             sPara = 0
 
-            if tP["tlu"] == useNormalLDS:
+            if tP["tlu"] != kernel["UnrollMajorLDS"]:
               if tP["wtc"] == tP["grcv"]:
                 sPerp = s
               elif tP["wuc"] == tP["grcv"]:
@@ -7432,7 +7429,7 @@ class KernelWriterAssembly(KernelWriter):
     if self.inTailLoop:
       inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * tP["bpe"]
       if kernel["MatrixInstruction"]:
-        if kernel["LdsTranpose"]:
+        if kernel["UnrollMajorLDS"]:
           inc = kernel["LocalSplitU"] * tP["bpe"]
         inc *= kernel["MatrixInstK"]
       tmpSgpr = self.getTmpSgpr(1)
@@ -7446,7 +7443,7 @@ class KernelWriterAssembly(KernelWriter):
     else:
       if tP["localReadInstruction"].numOffsets == 1:
         if kernel["MatrixInstruction"]:
-          if kernel["LdsTranpose"]:
+          if kernel["UnrollMajorLDS"]:
             tP["localReadOffset"] += kernel["LocalSplitU"] * kernel["MatrixInstK"]
           else:
             tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * kernel["MatrixInstK"]
@@ -7580,7 +7577,7 @@ class KernelWriterAssembly(KernelWriter):
 
         for oIdx in range(0, numOffsets):
           offset_val = (vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx]
-          if kernel["LdsTranpose"]:
+          if kernel["UnrollMajorLDS"]:
             offset_val *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
           offset_val = rIdx * blockWidth + offset_val + tP["localReadOffset"]
           offset_val = offset_val * tP["bpe"] + tP["localReadSwapByteOffset"]

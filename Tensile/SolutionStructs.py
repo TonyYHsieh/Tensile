@@ -1651,16 +1651,15 @@ class Solution:
 
     if state["MatrixInstruction"]:
       if state["MatrixInstruction"][0] != -1:
-        if len(state["MatrixInstruction"]) >= 4:
-          # check for valid instruction with input type
-          itemsPerThread = state["MatrixInstruction"][0] * state["MatrixInstruction"][1] * state["MatrixInstruction"][3] // 64
+        if len(state["MatrixInstruction"]) == 6:
           state["MatrixInstM"]  = state["MatrixInstruction"][0]
           state["MatrixInstN"]  = state["MatrixInstruction"][1]
           state["MatrixInstK"]  = state["MatrixInstruction"][2]
           state["MatrixInstB"]  = state["MatrixInstruction"][3]
-        if len(state["MatrixInstruction"]) == 6:
           state["MatrixInstBM"] = state["MatrixInstruction"][4]
           state["MatrixInstBN"] = state["MatrixInstruction"][5]
+        else:
+          reject(state, "unsupported MatrixInstruction")
       if not state["ProblemType"]["HighPrecisionAccumulate"] and \
          not state["ProblemType"]["DataType"].isSingle() :
         reject(state, "Matrix instructions for half types are natively accumulated" + \
@@ -1669,6 +1668,8 @@ class Solution:
     else:
       if state["ThreadTile"][0] > 16 or state["ThreadTile"][1] > 16:
         reject(state, "Invalid value for ThreadTile")
+
+    state["UnrollMajorLDS"] = state["MatrixInstruction"] and state["UnrollMajorLDS"]
 
     if state["MatrixInstruction"]:
       state["ThreadTile0"] = state["MatrixInstBM"] * state["MIWaveTile"][0] * (state["MatrixInstM"] * state["MatrixInstN"] // globalParameters["WavefrontWidth"])

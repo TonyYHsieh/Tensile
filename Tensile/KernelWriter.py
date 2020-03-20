@@ -1617,8 +1617,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
     ########################################
     # write vectors or vector components
     ########################################
-    useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
-    if kernel["ProblemType"]["TLUA"] == useNormalLDS: # NT no transpose
+    if kernel["ProblemType"]["TLUA"] != kernel["UnrollMajorLDS"]: # NT no transpose
       self.numWritesCoalA = kernel["NumLoadsCoalescedA"]
       if kernel["GlobalReadCoalesceVectorA"]: # read vectors, write vectors
         self.writeUnrollDimComponentsA = False # Scalar
@@ -1729,8 +1728,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
     ####################################
     # write vectors or vector components b
     ####################################
-    useNormalLDS = not bool(kernel["MatrixInstruction"] and kernel["LdsTranpose"])
-    if kernel["ProblemType"]["TLUB"] == useNormalLDS: # NT no transpose
+    if kernel["ProblemType"]["TLUB"] != kernel["UnrollMajorLDS"]: # NT no transpose
       self.numWritesCoalB = kernel["NumLoadsCoalescedB"]
       if kernel["GlobalReadCoalesceVectorB"]:
         self.writeUnrollDimComponentsB = False # Vector
