@@ -1652,6 +1652,10 @@ class Solution:
       state["Valid"] = True
 
     if state["EnableMatrixInstruction"]:
+      if not (state["ProblemType"]["DataType"].isSingle() \
+              or state["ProblemType"]["DataType"].isBFloat16() \
+              or state["ProblemType"]["DataType"].isHalf()):
+        reject(state, "didn't support Matrix Instruction with type %s" % str(state["ProblemType"]["DataType"]))
       if not state["MIBlock"] or len(state["MIBlock"]) != 6:
         reject(state, "invalid MIBlock")
       if not state["MIWaveGroup"] or len(state["MIWaveGroup"]) != 2:
@@ -1676,6 +1680,9 @@ class Solution:
       state["MatrixInstB"]  = state["MIBlock"][3]
       state["MatrixInstBM"] = state["MIBlock"][4]
       state["MatrixInstBN"] = state["MIBlock"][5]
+      state["MIInputsPerThread"] = 1 if state["ProblemType"]["DataType"].isSingle()   \
+                              else 2 if state["ProblemType"]["DataType"].isBFloat16() \
+                              else 4 # for FP16
 
       state["ThreadTile0"] = state["MatrixInstBM"] * state["MIWaveTile"][0] * (state["MatrixInstM"] * state["MatrixInstN"] // globalParameters["WavefrontWidth"])
       state["ThreadTile1"] = state["MatrixInstBN"] * state["MIWaveTile"][1]

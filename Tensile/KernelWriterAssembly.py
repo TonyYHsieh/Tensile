@@ -1185,12 +1185,12 @@ class KernelWriterAssembly(KernelWriter):
 
     ########################################
     # localRead A
-    localReadWidth = (kernel["VectorWidth"] * tPA["bpe"])//self.bpr
-    #bf16mfma todo
+    localReadWidth = (kernel["VectorWidth"] * tPA["bpe"]) // self.bpr
     if kernel["EnableMatrixInstruction"]:
-      localReadWidth = tPA["bpe"]/self.bpr   # since only NT form in LDS is supported, the
-                                             # only sensible way of loading along k-dimension 
-                                             # is one element at a time
+      localReadWidth = tPA["bpe"] / self.bpr
+    if kernel["UnrollMajorLDS"]:
+      localReadWidth *= kernel["MIInputsPerThread"]
+
     #localReadStridePerpendicular = 0
     localRead2Perpendicular = False
     self.localReadStrideCoalescedA = \
@@ -1209,12 +1209,11 @@ class KernelWriterAssembly(KernelWriter):
 
     ########################################
     # localRead B
-    localReadWidth = (kernel["VectorWidth"] * tPB["bpe"])//self.bpr
-    #bf16mfma todo
+    localReadWidth = (kernel["VectorWidth"] * tPB["bpe"]) // self.bpr
     if kernel["EnableMatrixInstruction"]:
-        localReadWidth = tPB["bpe"]/self.bpr # since only NT form in LDS is supported, the
-                                             # only sensible way of loading along k-dimension 
-                                             # is one element at a time
+      localReadWidth = tPB["bpe"] / self.bpr
+    if kernel["UnrollMajorLDS"]:
+      localReadWidth *= kernel["MIInputsPerThread"]
 
     #localReadStridePerpendicular = 0
     localRead2Perpendicular = False
@@ -1257,17 +1256,14 @@ class KernelWriterAssembly(KernelWriter):
     valuBlocks = (1+kernel["PrefetchLocalRead"]) * kernel["InnerUnroll"]
 
     if kernel["EnableMatrixInstruction"]:
-      self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * tPA["bpe"] // self.bpr
-      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * tPA["bpe"] // self.bpr # ABlocks
-      if kernel["ProblemType"]["DataType"].isHalf(): # MI for fp16 requires 2x vgprs
-        self.numVgprValuAPerBlock *= 2
-        self.numVgprValuBPerBlock *= 2
+      self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
+      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr # ABlocks
     else:
       self.numVgprValuAPerBlock = kernel["ThreadTileA"] * tPA["bpe"]//self.bpr
       self.numVgprValuBPerBlock = kernel["ThreadTileB"] * tPB["bpe"]//self.bpr
       if kernel["ProblemType"]["DataType"].isBFloat16() and kernel["ProblemType"]["HighPrecisionAccumulate"]:
-        self.numVgprValuAPerBlock = self.numVgprValuAPerBlock * 2
-        self.numVgprValuBPerBlock = self.numVgprValuBPerBlock * 2
+        self.numVgprValuAPerBlock *= 2
+        self.numVgprValuBPerBlock *= 2
 
     numVgprValuA = self.numVgprValuAPerBlock * valuBlocks
     numVgprValuB = self.numVgprValuBPerBlock * valuBlocks
@@ -7558,7 +7554,7 @@ class KernelWriterAssembly(KernelWriter):
     imod = Code.Module("LocalReadDo%s"%tc)
 
     numVectorsPerTile = kernel["MIWaveTile"][tIdx]
-    numReadsPerVector = tP["bpe"] // (blockWidth * 4) # bytes/register
+    numReadsPerVector = tP["bpe"] * kernel["MIInputsPerThread"] // int(blockWidth * 4) # bytes/register
 
     valuIdx = 0
     for vIdx in range(0, numVectorsPerTile):
@@ -7576,7 +7572,7 @@ class KernelWriterAssembly(KernelWriter):
             offset_val *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
           offset_val = rIdx * blockWidth + offset_val + tP["localReadOffset"]
           offset_val = offset_val * tP["bpe"] + tP["localReadSwapByteOffset"]
-          paramList.append(offset_val)
+          paramList.append(int(offset_val))
 
         paramTuple = tuple(paramList)
         comment = "L -> Reg lro=%d swapByteOffset=%u ti=%u vIdx=%u rIdx=%u oIdx=%u buffer=%u iui=%u" \
@@ -9758,7 +9754,7 @@ class KernelWriterAssembly(KernelWriter):
         # TODO : the vgprSerial is needed for-ever and if we grow here will split the
         # range of the tmps.  Maybe want to move vgprSerial to first vgpr?
         minElements = 2 if (kernel["ProblemType"]["DataType"].isHalf() or kernel["ProblemType"]["DataType"].isBFloat16()) else 1
-        minNeeded = minElements*numVgprsPerElement
+        minNeeded = minElements * numVgprsPerElement
         shrinkDb = 0
         if shrinkDb:
           print("numVgprAvailable=", numVgprAvailable, "minElements=", minElements, "minNeeded=", minNeeded)
