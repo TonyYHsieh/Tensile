@@ -583,7 +583,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
             "7wait for local read"))
       if self.enable["MAC"]:
         luIdx = (u) % (kernel["PrefetchLocalRead"] + 1)
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           kl.append(self.mfmaIter(kernel, luIdx, kernel["InnerUnroll"]))
         else:
           kl.append(self.macIter(kernel, luIdx, kernel["InnerUnroll"], useMacro=not isOptNLL ))
@@ -899,7 +899,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
 
         if self.enable["MAC"]:
           luIdx = (u) % (kernel["PrefetchLocalRead"]+1) # local to use for MACs
-          if kernel["MatrixInstruction"]:
+          if kernel["EnableMatrixInstruction"]:
             macIterCode.addCode(self.mfmaIter(kernel, luIdx, kernel["InnerUnroll"]))
           else:
             macIterCode.addCode(self.macIter(kernel, luIdx, kernel["InnerUnroll"], True ))
@@ -1149,7 +1149,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       # which waited for this ds_read
       if self.enable["MAC"]:
         luIdx = (unrollIter) % (kernel["PrefetchLocalRead"] + 1)
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           macIterCode.addCode(self.mfmaIter(kernel, luIdx, kernel["InnerUnroll"]))
         else:
           macIterCode.addCode(self.macIter(kernel, luIdx, kernel["InnerUnroll"], True))
@@ -1270,7 +1270,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       if self.enable["Wait"]:
         kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, -1, -1, 0, "4wait for local read"))
       if self.enable["MAC"]:
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           kl.append(self.mfmaIter(kernel, 0, tailLoopInnerUnroll, True))
         else:
           kl.append(self.macIter(kernel, 0, tailLoopInnerUnroll, True))
@@ -1299,12 +1299,12 @@ class KernelWriter(metaclass=abc.ABCMeta):
         # shift vector components d0
         if not kernel["GuaranteeNoPartialA"] and self.readTileDimVectorA:
           kl.append(self.comment("shift vector components d0"))
-          if kernel["MatrixInstruction"]:
+          if kernel["EnableMatrixInstruction"]:
             kl.append(self.shiftVectorComponentsForMatrixInst(kernel, tensorParametersA))
           else:
             kl.append(self.shiftVectorComponents(kernel, tensorParametersA))
         # shift vector components d1
-        if not kernel["GuaranteeNoPartialB"] and self.readTileDimVectorB and not kernel["MatrixInstruction"]:
+        if not kernel["GuaranteeNoPartialB"] and self.readTileDimVectorB and not kernel["EnableMatrixInstruction"]:
           kl.append(self.comment("shift vector components d1"))
           kl.append(self.shiftVectorComponents(kernel, tensorParametersB))
 
