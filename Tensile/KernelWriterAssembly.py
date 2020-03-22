@@ -5906,21 +5906,23 @@ class KernelWriterAssembly(KernelWriter):
     kStr = ""
 
     # alloc vgpr
-    tReg    = self.vgprPool.checkOut(1,"tReg") # remainder
+    kReg    = self.vgprPool.checkOut(1,"kReg") # remainder
     tmpVgpr = self.vgprPool.checkOut(2,"tmpVgpr")
     dummy   = self.vgprPool.checkOut(1,"dummy")
 
     # alloc sgpr
     tmpSgpr = self.getTmpSgpr(2)
 
-    loopCounterName = self.loopCounterName(kernel, self.unrollIdx)
-    accs_per_wave   = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
+    loopCounterName     = self.loopCounterName(kernel, self.unrollIdx)
+    accs_per_wave       = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
+    dividerFortidInK    = kernel["MatrixInstN"] * kernel["MatrixInstB"]
 
     # handle multiple K element in MFMA instruction
     if tail and kernel["MatrixInstK"] > 1:
-      kStr += vectorStaticDivide(tReg, "Serial", kernel["MatrixInstN"], tmpVgpr, tmpSgpr)
-      kStr += vectorStaticRemainder(dummy, tReg, tReg, kernel["MatrixInstK"], tmpVgpr, tmpSgpr)
-      kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(tReg), sgpr(loopCounterName), "check K index < Size L")
+      kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
+      kStr += vectorStaticDivide(kReg, kReg, dividerFortidInK, tmpVgpr, tmpSgpr)
+      kStr += staticMultiply(vgpr(kReg), vgpr(kReg), kernel["MIInputsPerThread"], sgpr(tmpSgpr))
+      kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index < Size L")
 
       for a in range(0, kernel["MIWaveTile"][0]):
         for iui in range(0, innerUnroll):
@@ -5947,7 +5949,7 @@ class KernelWriterAssembly(KernelWriter):
                         accStart, accEnd, aStr, bStr, accStart, accEnd, self.endLine)
 
     # release register
-    self.vgprPool.checkIn(tReg)
+    self.vgprPool.checkIn(kReg)
     self.vgprPool.checkIn(tmpVgpr)
     self.vgprPool.checkIn(dummy)
 
