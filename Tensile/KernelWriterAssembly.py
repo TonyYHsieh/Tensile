@@ -5916,23 +5916,27 @@ class KernelWriterAssembly(KernelWriter):
     loopCounterName     = self.loopCounterName(kernel, self.unrollIdx)
     accs_per_wave       = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
     dividerFortidInK    = kernel["MatrixInstN"] * kernel["MatrixInstB"]
+    vgprPerInput        = int(kernel["MIInputsPerThread"] * kernel["ProblemType"]["DataType"].numRegisters())
+    elementPerVgpr      = int(1 / kernel["ProblemType"]["DataType"].numRegisters())
 
     # handle multiple K element in MFMA instruction
     if tail and kernel["MatrixInstK"] > 1:
       kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
       kStr += vectorStaticDivide(kReg, kReg, dividerFortidInK, tmpVgpr, tmpSgpr)
       kStr += staticMultiply(vgpr(kReg), vgpr(kReg), kernel["MIInputsPerThread"], sgpr(tmpSgpr))
-      kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index < Size L")
 
-      for a in range(0, kernel["MIWaveTile"][0]):
-        for iui in range(0, innerUnroll):
-          aStr  = vgpr("ValuA_X%u_I%u+%u" % (m, iui, a), 1)
-          kStr += inst("v_cndmask_b32", aStr, aStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
-
-      for b in range(0, kernel["MIWaveTile"][1]):
-        for iui in range(0, innerUnroll):
-          bStr  = vgpr("ValuB_X%u_I%u+%u" % (m, iui, b), 1)
-          kStr += inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
+      for bk in range(0, vgprPerInput):
+        kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index < Size L")
+        for a in range(0, kernel["MIWaveTile"][0]):
+          for iui in range(0, innerUnroll):
+            aStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a*vgprPerInput, bk), 1)
+            kStr += inst("v_cndmask_b32", aStr, aStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
+        for b in range(0, kernel["MIWaveTile"][1]):
+          for iui in range(0, innerUnroll):
+            bStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b*vgprPerInput, bk), 1)
+            kStr += inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
+        if bk != vgprPerInput-1:
+          kStr += inst("v_add_u32", vgpr(kReg), elementPerVgpr, vgpr(kReg), "handle next vgpr data")
 
       kStr += "s_nop 0\n"
 
@@ -5942,8 +5946,8 @@ class KernelWriterAssembly(KernelWriter):
           accIdx   = b * kernel["MIWaveTile"][0] + a
           accStart = accIdx * accs_per_wave
           accEnd   = accStart + accs_per_wave - 1
-          aStr     = vgpr("ValuA_X%u_I%u+%u" % (m, iui, a), 1)
-          bStr     = vgpr("ValuB_X%u_I%u+%u" % (m, iui, b), 1)
+          aStr     = vgpr("ValuA_X%u_I%u+%u" % (m, iui, a*vgprPerInput), vgprPerInput)
+          bStr     = vgpr("ValuB_X%u_I%u+%u" % (m, iui, b*vgprPerInput), vgprPerInput)
           kStr    += "v_mfma_f32_%ux%ux%u%s a[%u:%u], %s, %s, a[%u:%u]%s" \
                      % (kernel["MatrixInstM"], kernel["MatrixInstN"], kernel["MatrixInstK"], kernel["ProblemType"]["DataType"].toNameAbbrev(),
                         accStart, accEnd, aStr, bStr, accStart, accEnd, self.endLine)
