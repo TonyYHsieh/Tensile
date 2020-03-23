@@ -5727,7 +5727,7 @@ class KernelWriterAssembly(KernelWriter):
         loopCounter = self.loopCounter(kernel, loopIdx)
 
       unrollInc = 1
-      if kernel["AssertSummationElementMultiple"] % kernel["InnerUnroll"] == 0:
+      if kernel["AssertSummationElementMultiple"] % (kernel["InnerUnroll"] * kernel["MatrixInstK"]) == 0:
         unrollInc *= kernel["InnerUnroll"]
       if kernel["EnableMatrixInstruction"]:
         unrollInc *= kernel["MatrixInstK"]

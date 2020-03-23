@@ -1253,9 +1253,12 @@ class KernelWriter(metaclass=abc.ABCMeta):
       # tail: macs
       kl.append(self.comment("tail loop: macs"))
       kl.append(self.openLoop(kernel, -1))
+
       # Try to use InnerUnroll in the tail loop if allowed:
-      tailLoopInnerUnroll = \
-        kernel["InnerUnroll"] if (kernel["AssertSummationElementMultiple"] % kernel["InnerUnroll"]==0) else 1
+      KinInnerUnroll = kernel["InnerUnroll"]
+      if kernel["EnableMatrixInstruction"]:
+        KinInnerUnroll *= kernel["MatrixInstK"]
+      tailLoopInnerUnroll = kernel["InnerUnroll"] if (kernel["AssertSummationElementMultiple"] % KinInnerUnroll == 0) else 1
 
       for iui in range(0,tailLoopInnerUnroll):
         if self.enable["LocalRead"]:

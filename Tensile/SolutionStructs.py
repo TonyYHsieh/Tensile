@@ -1667,6 +1667,8 @@ class Solution:
         reject(state, "Matrix instructions for half types are natively accumulated" + \
          " in fp32 precision. Please add the following config:" + \
          "\n - HighPrecisionAccumulate: True")
+      if (not state["ProblemType"]["DataType"].isSingle()) and (not state["UnrollMajorLDS"]):
+        reject(state, ("only support UnrollMajorLDS(True) with type %s" % str(state["ProblemType"]["DataType"])))
     else:
       if state["UnrollMajorLDS"]:
         reject(state, "didn't support UnrollMajorLDS in VALU mode yet")
@@ -2588,12 +2590,15 @@ class Solution:
 
     # LoopUnroll too small
     if state["LoopUnroll"] < 2:
-      reject(state, "LoopUnroll %u is less than 2" \
-          % (state["LoopUnroll"]))
+      reject(state, "LoopUnroll %u is less than 2" % (state["LoopUnroll"]))
 
     state["LoopIters"] = state["LoopUnroll"]
     if state["EnableMatrixInstruction"]:
       state["LoopIters"] //= state["MatrixInstK"]
+    if state["LoopIters"] < 2:
+      reject(state, "LoopIters %u is less than 2" % (state["LoopIters"]))
+
+
 
     # Determine if we can load directly-to-LDS.
     # Transpose requires a trip through registers to perform the transpose so can't use DirectToLdsA
