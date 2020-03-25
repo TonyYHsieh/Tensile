@@ -1676,15 +1676,16 @@ class Solution:
         reject(state, "Invalid value for ThreadTile")
 
     if state["EnableMatrixInstruction"]:
-      state["MatrixInstM"]  = state["MIBlock"][0]
-      state["MatrixInstN"]  = state["MIBlock"][1]
-      state["MatrixInstK"]  = state["MIBlock"][2]
-      state["MatrixInstB"]  = state["MIBlock"][3]
-      state["MatrixInstBM"] = state["MIBlock"][4]
-      state["MatrixInstBN"] = state["MIBlock"][5]
-      state["MIInputsPerThread"] = 1 if state["ProblemType"]["DataType"].isSingle()   \
-                              else 2 if state["ProblemType"]["DataType"].isBFloat16() \
-                              else 4 # for FP16
+      state["MatrixInstM"]         = state["MIBlock"][0]
+      state["MatrixInstN"]         = state["MIBlock"][1]
+      state["MatrixInstK"]         = state["MIBlock"][2]
+      state["MatrixInstB"]         = state["MIBlock"][3]
+      state["MatrixInstBM"]        = state["MIBlock"][4]
+      state["MatrixInstBN"]        = state["MIBlock"][5]
+      state["MIOutputVectorWidth"] = 4
+      state["MIInputsPerThread"]   = 1 if state["ProblemType"]["DataType"].isSingle()   \
+                                else 2 if state["ProblemType"]["DataType"].isBFloat16() \
+                                else 4 # for FP16
 
       state["ThreadTile0"] = state["MatrixInstBM"] * state["MIWaveTile"][0] * (state["MatrixInstM"] * state["MatrixInstN"] // globalParameters["WavefrontWidth"])
       state["ThreadTile1"] = state["MatrixInstBN"] * state["MIWaveTile"][1]

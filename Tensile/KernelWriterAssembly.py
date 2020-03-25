@@ -7637,7 +7637,7 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   # Shift Vector Components d0,1
   ##############################################################################
-  def shiftVectorComponents(self, kernel, tP):
+  def shiftVectorComponentsVALU(self, kernel, tP):
     kStr = ""
 
     # glvw
@@ -7878,12 +7878,12 @@ class KernelWriterAssembly(KernelWriter):
     self.vgprPool.checkIn(vReg)
     return kStr
 
-  def shiftVectorComponentsForMatrixInst(self, kernel, tP):
-    """ when we enable shift ptr with vectorwidth(2), we shfit global read on edge block when size % vectorwidth != 0.
+  def shiftVectorComponentsMFMA(self, kernel, tP):
+    """ when we enable shift ptr with vectorwidth(2), we shift global read on edge block when size % vectorwidth != 0.
         For example if M size == 3 vector width == 2, we want to do global read for [0-1] and [2-3].
-        But 3 is not in memory object, so we shfit to do global read [0-1] and [1-2].
+        But 3 is not in memory object, so we shift to do global read [0-1] and [1-2].
         So buffer become [0, 1, 1, 2], assume result in register is same as input [0, 1, 1, 2]
-        We need to shfit it back to [0, 1, 2].
+        We need to shift it back to [0, 1, 2].
 
         In MFMA outputs, We have numContinuousOutput(4) for each thread.
         We have numThreadInWave(64) threads.
@@ -7892,33 +7892,26 @@ class KernelWriterAssembly(KernelWriter):
         stride of continous output for each thread (numSubOutputPerWave0) is numOutputThreads0 * numContinuousOutput, (8).
         we have numSubOutputGroupsPerWave0 which is 4 (kernel[tP["mt"]](64) // numSubOutputPerWave0(8))
 
-        So we do shfit back by below alorithm.
+        So we do shift back by below alorithm.
         1. check if M_size % vectorwidth != 0, return if == 0
         2. decide which subgroup we need to shift, M_size(3) means 3/8 = group 0
-        3. decide which thread we need to shfit, we have different groups of thread, (0-31) for first group, (32-63) for second group.
-        4. decide which shfit block (subTile1) we want to shfit. for ex [0-1], [1-2], we want to shift second subtile
+        3. decide which thread we need to shift, we have different groups of thread, (0-31) for first group, (32-63) for second group.
+        4. decide which shift block (subTile1) we want to shift. for ex [0-1], [1-2], we want to shift second subtile
     """
-
-
 
     kStr = ""
 
-    # glvw
-    glvw = tP["glvw"]
-
-    # how many threads in each wave
-    numThreadInWave            = 64
-
-    # mfma continuous output.
-    numContinuousOutput        = 4
+    glvw                       = tP["glvw"]
+    numThreadInWave            = globalParameters["WavefrontWidth"]
+    MIBShape0                  = kernel["MatrixInstM"] * kernel["MatrixInstBM"]
+    numContinuousOutput        = kernel["MIOutputVectorWidth"]
     numOutputThreads1          = kernel["MatrixInstN"]
     numOutputThreads0          = numThreadInWave // numOutputThreads1
     numSubOutputPerWave0       = numOutputThreads0 * numContinuousOutput
-    numSubOutputGroupsPerWave0 = kernel[tP["mt"]] // numSubOutputPerWave0
+    numSubOutputGroupsPerWave0 = MIBShape0 // numSubOutputPerWave0
     numShiftBlock              = numContinuousOutput // glvw
-    numOutputElements          = numSubOutputGroupsPerWave0 * numContinuousOutput
-
-    subTile1 = (kernel["MacroTile1"] // ((kernel["SubGroup0"] * kernel["SubGroup1"]) // numThreadInWave)) // kernel["MatrixInstN"]
+    numOutputElements          = numSubOutputGroupsPerWave0 * numContinuousOutput * kernel["MIWaveTile"][0]
+    subTile1                   = kernel["MatrixInstBN"] * kernel["MIWaveTile"][1]
 
     # labels for reminder of vectorwidth
     svrLabels = []
@@ -7933,105 +7926,118 @@ class KernelWriterAssembly(KernelWriter):
       svrLabels.append(label)
       tmpLabels = []
       tmp2Labels = []
-      for v in range(0, numSubOutputGroupsPerWave0):
-        label = self.getLabelNum("ShiftVectorComponents%u_R%u_V%u" % (tP["idx"], r, v) )
-        tmpLabels.append(label)
-        tmp2Labels2 = []
-        for o in range(0, numShiftBlock):
-          label = self.getLabelNum("ShiftVectorComponents%u_R%u_V%u_O%u" % (tP["idx"], r, v, o) )
-          tmp2Labels2.append(label)
-        tmp2Labels.append(tmp2Labels2)
+      for wt in range(0, kernel["MIWaveTile"][0]):
+        for v in range(0, numSubOutputGroupsPerWave0):
+          label = self.getLabelNum("ShiftVectorComponents%u_R%u_WT%u_V%u" % (tP["idx"], r, wt, v) )
+          tmpLabels.append(label)
+          tmp2Labels2 = []
+          for o in range(0, numShiftBlock):
+            label = self.getLabelNum("ShiftVectorComponents%u_R%u_Wt%u_V%u_O%u" % (tP["idx"], r, wt, v, o) )
+            tmp2Labels2.append(label)
+          tmp2Labels.append(tmp2Labels2)
       sviLabels.append(tmpLabels)
       svoLabels.append(tmp2Labels)
 
     # wgMT value
     tmpSgpr = self.getTmpSgpr(2)
     tmpVgpr = self.vgprPool.checkOut(2)
+    dummy   = self.vgprPool.checkOut(1)
     wgMT    = self.vgprPool.checkOut(1)
 
     # get M size of edge block
+    mtReg = self.vgprPool.checkOut(1)
     kStr += inst("v_mov_b32"    , vgpr(wgMT), sgpr(tP["wg"]), "")
     kStr += inst("v_mul_i32_i24", vgpr(wgMT), hex(-kernel[tP["mt"]]), vgpr(wgMT), "wg*MT")
     kStr += inst("_v_add_co_u32", vgpr(wgMT), "vcc", sgpr("SizesFree+%u"%tP["idx"]), vgpr(wgMT), "wgMT = Size - wg*MT")
-    kStr += inst("v_mov_b32"    , vgpr(tmpVgpr), hex(kernel[tP["mt"]]), "MT")
-    kStr += inst("v_cmp_lt_u32" , sgpr(tmpSgpr,2), vgpr(wgMT), vgpr(tmpVgpr), "wgMT < MT" )
-    kStr += inst("v_cndmask_b32", vgpr(wgMT), vgpr(tmpVgpr), vgpr(wgMT), sgpr(tmpSgpr,2), "wgMT = (wgMT < MT) ? wgMT : MT" )
-    dummy = self.vgprPool.checkOut(1)
+    kStr += inst("v_mov_b32"    , vgpr(mtReg), hex(kernel[tP["mt"]]), "MT")
+    kStr += inst("v_cmp_lt_u32" , sgpr(tmpSgpr,2), vgpr(wgMT), vgpr(mtReg), "wgMT < MT" )
+    kStr += inst("v_cndmask_b32", vgpr(wgMT), vgpr(mtReg), vgpr(wgMT), sgpr(tmpSgpr,2), "wgMT = (wgMT < MT) ? wgMT : MT" )
 
-
-    # rReg : reminder of M_size % vectorwidth
-    rReg = self.vgprPool.checkOut(1)
-    divisor = glvw
-    kStr += vectorStaticRemainder(dummy, rReg, wgMT, divisor, tmpVgpr, tmpSgpr)
+    wReg = self.vgprPool.checkOut(1)
+    kStr += vectorStaticDivide(wReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, wReg, wReg, kernel["MIWaveGroup"][0], tmpVgpr, tmpSgpr)
+    sReg = self.vgprPool.checkOut(1)
+    kStr += vectorStaticDivide(sReg, wgMT, MIBShape0, tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, sReg, sReg, kernel["MIWaveGroup"][0], tmpVgpr, tmpSgpr)
+    kStr += inst("v_cmp_eq_u32" , sgpr(tmpSgpr,2), vgpr(sReg), vgpr(wReg), "wave_id0 == block_belong_to_wave0?" )
+    kStr += inst("v_cndmask_b32", vgpr(wgMT), vgpr(mtReg), vgpr(wgMT), sgpr(tmpSgpr,2), "wgMT = (wgMT < MT) ? wgMT : MT" )
+    self.vgprPool.checkIn(mtReg)
+    self.vgprPool.checkIn(sReg)
 
     # gReg : group id of numSubOutputGroupsPerWave0
     gReg = self.vgprPool.checkOut(1)
-    divisor = numSubOutputPerWave0  # glvw
-    kStr += vectorStaticDivide(gReg, wgMT, divisor, tmpVgpr, tmpSgpr)
+    kStr += staticMultiply(vgpr(wReg), vgpr(wReg), MIBShape0 // numSubOutputPerWave0, sgpr(tmpSgpr))
+    kStr += vectorStaticDivide(gReg, wgMT, numSubOutputPerWave0, tmpVgpr, tmpSgpr)
+    kStr += inst("v_sub_u32", vgpr(gReg), vgpr(gReg), vgpr(wReg), "")
+    self.vgprPool.checkIn(wReg)
 
     # eReg : use to disguish which shift block (sub-tile) we need to deal with
     eReg = self.vgprPool.checkOut(1)
-    divisor = numContinuousOutput
-    kStr += vectorStaticRemainder(dummy, eReg, wgMT, divisor, tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, eReg, wgMT, numContinuousOutput, tmpVgpr, tmpSgpr)
 
     # mRge : decide which thread have to deal with this M-size
     mReg = self.vgprPool.checkOut(1)
-    divisor = numContinuousOutput
-    kStr += vectorStaticDivide(mReg, wgMT, divisor, tmpVgpr, tmpSgpr)
-    divisor = numOutputThreads0
-    kStr += vectorStaticRemainder(dummy, mReg, mReg, divisor, tmpVgpr, tmpSgpr)
+    kStr += vectorStaticDivide(mReg, wgMT, numContinuousOutput, tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, mReg, mReg, numOutputThreads0, tmpVgpr, tmpSgpr)
 
     # mRge : thread group id [0-31] or [32-63] for mfma 32x32x2
     tReg = self.vgprPool.checkOut(1)
-    divisor = numThreadInWave
-    kStr += vectorStaticRemainder(dummy, tReg, "Serial", divisor, tmpVgpr, tmpSgpr)
-    divisor = kernel["MatrixInstN"]
-    kStr += vectorStaticDivide(tReg, tReg, divisor, tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, tReg, "Serial", numThreadInWave, tmpVgpr, tmpSgpr)
+    kStr += vectorStaticDivide(tReg, tReg, kernel["MatrixInstN"], tmpVgpr, tmpSgpr)
 
+    # rReg : reminder of M_size % vectorwidth
     # decide to jump to block which handle this case, M_szie % vector width
+    rReg = self.vgprPool.checkOut(1)
+    kStr += vectorStaticRemainder(dummy, rReg, wgMT, glvw, tmpVgpr, tmpSgpr)
     for r in range(1, glvw):
       kStr += inst("v_cmp_eq_u32", "vcc", vgpr(rReg), hex(r), "wgMT%%VW == %u"%r )
       kStr += inst("s_cbranch_vccnz label_%04u" % svrLabels[(r-1)], "shift d%u r=%u"%(tP["idx"], r))
     kStr += inst("s_branch label_%04u"%svrLabels[glvw-1], "no shifting" )
+    self.vgprPool.checkIn(rReg)
 
     # blocks for handle M_szie % vector width
     for r in range(1, glvw):
       kStr += self.comment3("shift d%u r=%u"%(tP["idx"], r))
       kStr += "label_%04u:%s" % (svrLabels[r-1], self.endLine)
 
-      # decide to jump to block wich handle sub group id for numSubOutputGroupsPerWave0
-      # we have 8 blocks for MT-M 64 with mfma 32x32x2. 64/2(thread group)/4(continous output)
-      for packIdx in range(0, numSubOutputGroupsPerWave0):
-        kStr += inst("v_cmp_eq_u32", "vcc", vgpr(gReg), hex(packIdx), "wgMT/8 == %u"%packIdx )
-        kStr += inst("s_cbranch_vccnz label_%04u" % sviLabels[(r-1)][packIdx], "shift d%u, r=%u, v=%u"%(tP["idx"], r, packIdx))
+      for wt in range(0, kernel["MIWaveTile"][0]):
+        # decide to jump to block wich handle sub group id for numSubOutputGroupsPerWave0
+        # we have 8 blocks for MT-M 64 with mfma 32x32x2. 64/2(thread group)/4(continous output)
+        for ot in range(0, numSubOutputGroupsPerWave0):
+          packIdx = wt * numSubOutputGroupsPerWave0 + ot
+          grpVal  = wt * numSubOutputGroupsPerWave0 * kernel["MIWaveGroup"][0] + ot
+          kStr += inst("v_cmp_eq_u32", "vcc", vgpr(gReg), hex(grpVal), "wgMT/8 == %u" % packIdx )
+          kStr += inst("s_cbranch_vccnz label_%04u" % sviLabels[(r-1)][packIdx], "shift d%u, r=%u, v=%u" % (tP["idx"], r, packIdx))
 
-      # blocks for handle sub group id for numSubOutputGroupsPerWave0
-      for packIdx in range(0, numSubOutputGroupsPerWave0):
-        kStr += self.comment("shift d%u r=%u v=%u"%(tP["idx"], r, packIdx))
-        kStr += "label_%04u:%s" % (sviLabels[r-1][packIdx], self.endLine)
+      for wt in range(0, kernel["MIWaveTile"][0]):
+        # blocks for handle sub group id for numSubOutputGroupsPerWave0
+        for ot in range(0, numSubOutputGroupsPerWave0):
+          packIdx = wt * numSubOutputGroupsPerWave0 + ot
+          kStr += self.comment("shift d%u r=%u v=%u" % (tP["idx"], r, packIdx))
+          kStr += "label_%04u:%s" % (sviLabels[r-1][packIdx], self.endLine)
 
-        # mask if last thread in thread#-tile column
-        kStr += inst("v_cmpx_eq_u32", sgpr(tmpSgpr,2), vgpr(tReg), vgpr(mReg), "(serial % 64) / 32 == (wgMT/4)%2" )
+          # mask if last thread in thread#-tile column
+          kStr += inst("v_cmpx_eq_u32", sgpr(tmpSgpr,2), vgpr(tReg), vgpr(mReg), "(serial % 64) / 32 == (wgMT/4)%2" )
 
-        # decide to jump to block wich handle element of shfit block (subtile)
-        # for vector widht 2 with continuous 4, we have 1, 3 case to handle
-        for outIdx in range(0, numShiftBlock):
-          kStr += inst("v_cmp_eq_u32", "vcc", vgpr(eReg), hex(outIdx*glvw+r), "wgMT %% 4 == %u" % (outIdx*2+1) )
-          kStr += inst("s_cbranch_vccnz label_%04u" % svoLabels[(r-1)][packIdx][outIdx], "shift d%u, r=%u, v=%u, o=%u" % (tP["idx"], r, packIdx, outIdx))
+          # decide to jump to block wich handle element of shfit block (subtile)
+          # for vector widht 2 with continuous 4, we have 1, 3 case to handle
+          for outIdx in range(0, numShiftBlock):
+            kStr += inst("v_cmp_eq_u32", "vcc", vgpr(eReg), hex(outIdx*glvw+r), "wgMT %% 4 == %u" % (outIdx*2+1) )
+            kStr += inst("s_cbranch_vccnz label_%04u" % svoLabels[(r-1)][packIdx][outIdx], "shift d%u, r=%u, v=%u, o=%u" % (tP["idx"], r, packIdx, outIdx))
 
-        # blocks to handle shfiting
-        for outIdx in range(0, numShiftBlock):
-          kStr += "label_%04u:%s" % (svoLabels[(r-1)][packIdx][outIdx], self.endLine)
-          for subTile1Idx in range(0, subTile1):
-            for shiftIdx in range(0, r):
-              dstVgpr = subTile1Idx*numOutputElements + packIdx*numContinuousOutput + outIdx*glvw + shiftIdx
-              srcVgpr = subTile1Idx*numOutputElements + packIdx*numContinuousOutput + outIdx*glvw + shiftIdx + 1
-              kStr += inst("v_mov_b32", vgpr(dstVgpr), vgpr(srcVgpr), "")
+          # blocks to handle shfiting
+          for outIdx in range(0, numShiftBlock):
+            kStr += "label_%04u:%s" % (svoLabels[(r-1)][packIdx][outIdx], self.endLine)
+            for subTile1Idx in range(0, subTile1):
+              for shiftIdx in range(0, r):
+                dstVgpr = subTile1Idx * numOutputElements + packIdx * numContinuousOutput + outIdx * glvw + shiftIdx
+                srcVgpr = subTile1Idx * numOutputElements + packIdx * numContinuousOutput + outIdx * glvw + shiftIdx + (glvw - r)
+                kStr += inst("v_mov_b32", vgpr(dstVgpr), vgpr(srcVgpr), "")
 
-        # end shift reset mask and jump out
-        kStr += inst("s_mov_b64", sgpr(tmpSgpr,2), "0xFFFFFFFFFFFFFFFF", "to restore all threads active")
-        kStr += inst("s_or_saveexec_b64", "vcc", sgpr(tmpSgpr,2), "all threads active")
-        kStr += inst("s_branch label_%04u" % svrLabels[glvw-1], "done shifting" )
+          # end shift reset mask and jump out
+          kStr += inst("s_mov_b64", sgpr(tmpSgpr,2), "0xFFFFFFFFFFFFFFFF", "to restore all threads active")
+          kStr += inst("s_or_saveexec_b64", "vcc", sgpr(tmpSgpr,2), "all threads active")
+          kStr += inst("s_branch label_%04u" % svrLabels[glvw-1], "done shifting" )
 
     kStr += "label_%04u: // end shift0%s" % (svrLabels[glvw-1], self.endLine)
 
@@ -8039,13 +8045,18 @@ class KernelWriterAssembly(KernelWriter):
     self.vgprPool.checkIn(tmpVgpr)
     self.vgprPool.checkIn(wgMT)
     self.vgprPool.checkIn(dummy)
-    self.vgprPool.checkIn(rReg)
     self.vgprPool.checkIn(gReg)
     self.vgprPool.checkIn(eReg)
     self.vgprPool.checkIn(mReg)
     self.vgprPool.checkIn(tReg)
 
     return kStr
+
+  def shiftVectorComponents(self, kernel, tP):
+    if kernel["EnableMatrixInstruction"]:
+      return self.shiftVectorComponentsMFMA(kernel, tP)
+    else:
+      return self.shiftVectorComponentsVALU(kernel, tP)
 
 
   ##############################################################################
