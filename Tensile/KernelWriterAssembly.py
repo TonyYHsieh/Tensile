@@ -5905,19 +5905,22 @@ class KernelWriterAssembly(KernelWriter):
 
     kStr = ""
 
+    # calculate constant
+    loopCounterName  = self.loopCounterName(kernel, self.unrollIdx)
+    accs_per_wave    = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
+    dividerFortidInK = kernel["MatrixInstN"] * kernel["MatrixInstB"]
+    vgprPerInput     = int(kernel["MIInputsPerThread"] * kernel["ProblemType"]["DataType"].numRegisters())
+    shiftPerElement  = int(kernel["ProblemType"]["DataType"].numRegisters() * 32)
+    elementPerVgpr   = int(1 / kernel["ProblemType"]["DataType"].numRegisters())
+
     # alloc vgpr
     kReg    = self.vgprPool.checkOut(1,"kReg") # remainder
+    abReg   = self.vgprPool.checkOut(vgprPerInput,"abReg")
     tmpVgpr = self.vgprPool.checkOut(2,"tmpVgpr")
     dummy   = self.vgprPool.checkOut(1,"dummy")
 
     # alloc sgpr
-    tmpSgpr = self.getTmpSgpr(2)
-
-    loopCounterName     = self.loopCounterName(kernel, self.unrollIdx)
-    accs_per_wave       = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
-    dividerFortidInK    = kernel["MatrixInstN"] * kernel["MatrixInstB"]
-    vgprPerInput        = int(kernel["MIInputsPerThread"] * kernel["ProblemType"]["DataType"].numRegisters())
-    elementPerVgpr      = int(1 / kernel["ProblemType"]["DataType"].numRegisters())
+    tmpSgpr = self.getTmpSgpr(3)
 
     # handle multiple K element in MFMA instruction
     if tail and kernel["MatrixInstK"] > 1:
@@ -5925,20 +5928,41 @@ class KernelWriterAssembly(KernelWriter):
       kStr += vectorStaticDivide(kReg, kReg, dividerFortidInK, tmpVgpr, tmpSgpr)
       kStr += staticMultiply(vgpr(kReg), vgpr(kReg), kernel["MIInputsPerThread"], sgpr(tmpSgpr))
 
+      # replace 0 for differnet thread
+      kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index >= Size L")
       for bk in range(0, vgprPerInput):
-        kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index < Size L")
         for a in range(0, kernel["MIWaveTile"][0]):
           for iui in range(0, innerUnroll):
             aStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a*vgprPerInput, bk), 1)
-            kStr += inst("v_cndmask_b32", aStr, aStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
+            kStr += inst("v_cndmask_b32", aStr, aStr, hex(0), sgpr(tmpSgpr, 2), "set 0 if K_idx >= sizeL")
         for b in range(0, kernel["MIWaveTile"][1]):
           for iui in range(0, innerUnroll):
             bStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b*vgprPerInput, bk), 1)
-            kStr += inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "0 if K_idx >= sizeL")
-        if bk != vgprPerInput-1:
-          kStr += inst("v_add_u32", vgpr(kReg), elementPerVgpr, vgpr(kReg), "handle next vgpr data")
+            kStr += inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "set 0 if K_idx >= sizeL")
 
-      kStr += "s_nop 0\n"
+      # replace 0 for same thread
+      if kernel["MIInputsPerThread"] > 1:
+        kStr += inst("v_sub_u32",    vgpr(kReg), sgpr(loopCounterName), vgpr(kReg), "get distance between size and k index")
+        kStr += inst("v_cmp_lt_i32", sgpr(tmpSgpr,2), vgpr(kReg), kernel["MIInputsPerThread"], "set partial 0 if distance less than input per thread")
+        kStr += inst("s_and_b32",    sgpr(tmpSgpr+2), sgpr(loopCounterName), kernel["MIInputsPerThread"]-1, "get inputs for edge thread")
+        kStr += inst("s_sub_u32",    sgpr(tmpSgpr+2), kernel["MIInputsPerThread"], sgpr(tmpSgpr+2), "use shift to fill 0 for outside element")
+        kStr += inst("s_lshl_b32",   sgpr(tmpSgpr+2), sgpr(tmpSgpr+2), log2(shiftPerElement), "use shift to fill 0 for outside element")
+        for a in range(0, kernel["MIWaveTile"][0]):
+          for iui in range(0, innerUnroll):
+            aStr  = vgpr("ValuA_X%u_I%u+%u" % (m, iui, a * vgprPerInput), vgprPerInput)
+            kStr += inst("v_lshlrev_b%u" % (vgprPerInput*32), vgpr(abReg, vgprPerInput), sgpr(tmpSgpr+2), aStr, "")
+            for bk in range(0, vgprPerInput):
+              aStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a * vgprPerInput, bk), 1)
+              kStr += inst("v_cndmask_b32", aStr, aStr, vgpr(abReg+bk), sgpr(tmpSgpr, 2), "")
+        for b in range(0, kernel["MIWaveTile"][1]):
+          for iui in range(0, innerUnroll):
+            bStr     = vgpr("ValuB_X%u_I%u+%u" % (m, iui, b*vgprPerInput), vgprPerInput)
+            kStr += inst("v_lshlrev_b%u" % (vgprPerInput*32), vgpr(abReg, vgprPerInput), sgpr(tmpSgpr+2), bStr, "")
+            for bk in range(0, vgprPerInput):
+              bStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b*vgprPerInput, bk), 1)
+              kStr += inst("v_cndmask_b32", bStr, bStr, vgpr(abReg+bk), sgpr(tmpSgpr, 2), "")
+
+      kStr += "s_nop 1\n"
 
     for b in range(0, kernel["MIWaveTile"][1]):
       for a in range(0, kernel["MIWaveTile"][0]):
@@ -5954,6 +5978,7 @@ class KernelWriterAssembly(KernelWriter):
 
     # release register
     self.vgprPool.checkIn(kReg)
+    self.vgprPool.checkIn(abReg)
     self.vgprPool.checkIn(tmpVgpr)
     self.vgprPool.checkIn(dummy)
 
