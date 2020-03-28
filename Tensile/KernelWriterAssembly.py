@@ -1257,7 +1257,10 @@ class KernelWriterAssembly(KernelWriter):
 
     if kernel["EnableMatrixInstruction"]:
       self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
-      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr # ABlocks
+      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
+      if kernel["UnrollMajorLDS"] == False:
+        self.numVgprValuAPerBlock *= 2
+        self.numVgprValuBPerBlock *= 2
     else:
       self.numVgprValuAPerBlock = kernel["ThreadTileA"] * tPA["bpe"]//self.bpr
       self.numVgprValuBPerBlock = kernel["ThreadTileB"] * tPB["bpe"]//self.bpr
@@ -5906,12 +5909,14 @@ class KernelWriterAssembly(KernelWriter):
     kStr = ""
 
     # calculate constant
+    numRegisters     = kernel["ProblemType"]["DataType"].numRegisters()
     loopCounterName  = self.loopCounterName(kernel, self.unrollIdx)
     accs_per_wave    = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
     dividerFortidInK = kernel["MatrixInstN"] * kernel["MatrixInstB"]
-    vgprPerInput     = int(kernel["MIInputsPerThread"] * kernel["ProblemType"]["DataType"].numRegisters())
-    shiftPerElement  = int(kernel["ProblemType"]["DataType"].numRegisters() * 32)
-    elementPerVgpr   = int(1 / kernel["ProblemType"]["DataType"].numRegisters())
+    vgprPerInput     = int(kernel["MIInputsPerThread"] * numRegisters)
+    shiftPerElement  = int(numRegisters * 32)
+    elementPerVgpr   = int(1 / numRegisters)
+    s_nop            = 0
 
     # alloc vgpr
     kReg    = self.vgprPool.checkOut(1,"kReg") # remainder
@@ -5921,6 +5926,28 @@ class KernelWriterAssembly(KernelWriter):
 
     # alloc sgpr
     tmpSgpr = self.getTmpSgpr(3)
+
+    if (numRegisters == 0.5) and (kernel["UnrollMajorLDS"] == False):
+      inPerThread   = int(kernel["MIInputsPerThread"])
+      vgrpPerThread = int(kernel["MIInputsPerThread"] * numRegisters)
+
+      for a in range(0, kernel["MIWaveTile"][0]):
+        for iui in range(0, innerUnroll):
+          for i in range(0, vgrpPerThread):
+            aStr   = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a * vgrpPerThread, i), 1)
+            alStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a * inPerThread,   i*2+0), 1)
+            ahStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a * inPerThread,   i*2+1), 1)
+            kStr += inst("v_or_b32", aStr, alStr, ahStr, "pack two half to one")
+
+      for b in range(0, kernel["MIWaveTile"][1]):
+        for iui in range(0, innerUnroll):
+          for i in range(0, vgrpPerThread):
+            bStr   = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b * vgrpPerThread, i), 1)
+            blStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b * inPerThread,   i*2+0), 1)
+            bhStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b * inPerThread,   i*2+1), 1)
+            kStr += inst("v_or_b32", bStr, blStr, bhStr, "pack two half to one")
+
+      s_nop = 2
 
     # handle multiple K element in MFMA instruction
     if tail and kernel["MatrixInstK"] > 1:
@@ -5962,7 +5989,9 @@ class KernelWriterAssembly(KernelWriter):
               bStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b*vgprPerInput, bk), 1)
               kStr += inst("v_cndmask_b32", bStr, bStr, vgpr(abReg+bk), sgpr(tmpSgpr, 2), "")
 
-      kStr += "s_nop 1\n"
+      s_nop = 2
+
+    kStr += ("s_nop %u\n" % (s_nop - 1)) if s_nop else ""
 
     for b in range(0, kernel["MIWaveTile"][1]):
       for a in range(0, kernel["MIWaveTile"][0]):
@@ -7572,20 +7601,25 @@ class KernelWriterAssembly(KernelWriter):
 
     self.localReadDoCnt += 1
 
-    tc          = tP["tensorChar"]
-    tIdx        = tP["tensorIdx"]
-    instruction = tP["localReadInstruction"]
+    imod = Code.Module("LocalReadDo%s" % tP["tensorChar"])
+
+    tc               = tP["tensorChar"]
+    tIdx             = tP["tensorIdx"]
+    instruction      = tP["localReadInstruction"]
 
     numOffsets       = instruction.numOffsets
     blockWidth       = instruction.blockWidth
-    offsetMultiplier = 1
     MIWaveGropuShape = [ kernel["MatrixInstM"] * kernel["MatrixInstBM"] * kernel["MIWaveGroup"][0], \
                          kernel["MatrixInstN"] * kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1] ]
-
-    imod = Code.Module("LocalReadDo%s"%tc)
+    tileStride       = 1
+    UnrollStride     = kernel["MacroTile%s" % tP["tensorChar"]] + kernel["LdsPad%s" % tc]
+    if kernel["UnrollMajorLDS"]:
+      tileStride     = kernel["DepthU"] + kernel["LdsPad%s"%tc]
+      UnrollStride   = 1
 
     numVectorsPerTile = kernel["MIWaveTile"][tIdx]
     numReadsPerVector = tP["bpe"] * kernel["MIInputsPerThread"] // int(blockWidth * 4) # bytes/register
+    numVgpr           = int(ceil(blockWidth))
 
     valuIdx = 0
     for vIdx in range(0, numVectorsPerTile):
@@ -7593,15 +7627,13 @@ class KernelWriterAssembly(KernelWriter):
         localReadCode = imod.addCode (Code.Module("LocalRead%s Valu%u"%(tc,valuIdx)))
 
         paramList = []
-        destVgpr = vgpr("Valu%s_X%u_I%u+%u"%(tc, bufferIdx, iui, valuIdx), blockWidth)
+        destVgpr = vgpr("Valu%s_X%u_I%u+%u"%(tc, bufferIdx, iui, valuIdx), numVgpr)
         paramList.append(destVgpr)
         paramList.append(vgpr("LocalReadAddr%s"%tc))
 
         for oIdx in range(0, numOffsets):
-          offset_val = (vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx]
-          if kernel["UnrollMajorLDS"]:
-            offset_val *= (kernel["DepthU"] + kernel["LdsPad%s"%tc])
-          offset_val = rIdx * blockWidth + offset_val + tP["localReadOffset"]
+          offset_val = (vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx] * tileStride
+          offset_val = rIdx * UnrollStride + offset_val + tP["localReadOffset"]
           offset_val = offset_val * tP["bpe"] + tP["localReadSwapByteOffset"]
           paramList.append(int(offset_val))
 
@@ -7609,8 +7641,9 @@ class KernelWriterAssembly(KernelWriter):
         comment = "L -> Reg lro=%d swapByteOffset=%u ti=%u vIdx=%u rIdx=%u oIdx=%u buffer=%u iui=%u" \
             % (tP["localReadOffset"], tP["localReadSwapByteOffset"], MIWaveGropuShape[tIdx], vIdx, rIdx, oIdx, bufferIdx, iui)
 
-        localReadCode.addCode(Code.LocalReadInst(instruction.toCodeInst(paramTuple), comment))
-        valuIdx += blockWidth
+        highBits = (blockWidth == 0.5) and ((rIdx % 2) == 1)
+        localReadCode.addCode(Code.LocalReadInst(instruction.toCodeInst(paramTuple, 0, highBits), comment))
+        valuIdx += numVgpr
 
         if self.db["CheckValue1%s"%tc]:
             localReadCode.addInst("s_waitcnt lgkmcnt(0)", "CheckValue1 wait for LDS read")
