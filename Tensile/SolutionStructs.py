@@ -2681,12 +2681,12 @@ class Solution:
     # generate partial loads here and reject PBC solutions:
     # For non-TLU the free dim is in perp dim - should always be TRUE?  TODO
     if state["ProblemType"]["TLUA"]:
-      state["GuaranteeNoPartialA"] = state["AssertFree0ElementMultiple"]%state["GlobalLoadVectorWidthA"]==0
+      state["GuaranteeNoPartialA"] = state["AssertFree0ElementMultiple"] % state["GlobalLoadVectorWidthA"] == 0
     else:
       state["GuaranteeNoPartialA"] = True
 
     if state["ProblemType"]["TLUB"]:
-      state["GuaranteeNoPartialB"] = state["AssertFree1ElementMultiple"]%state["GlobalLoadVectorWidthB"]==0
+      state["GuaranteeNoPartialB"] = state["AssertFree1ElementMultiple"] % state["GlobalLoadVectorWidthB"] == 0
     else:
       state["GuaranteeNoPartialB"] = True
 
@@ -2701,14 +2701,14 @@ class Solution:
       cont1 = not state["GuaranteeNoPartialA"]
       cont2 = ((state["MIOutputVectorWidth"] % state["GlobalLoadVectorWidthA"]) != 0)
       if cont1 and cont2:
-        reject(state, "GlobalLoadVectorWidthA %u \% MIOutputVectorWidth %u must be 0" % \
-          state["GlobalLoadVectorWidthA"], state["MIOutputVectorWidth"])
+        reject(state, "GlobalLoadVectorWidthA %u %% MIOutputVectorWidth %u must be 0" % \
+          (state["GlobalLoadVectorWidthA"], state["MIOutputVectorWidth"]))
 
       cont1 = not state["GuaranteeNoPartialB"]
       cont2 = ((state["MIOutputVectorWidth"] % state["GlobalLoadVectorWidthB"]) != 0)
       if cont1 and cont2:
-        reject(state, "GlobalLoadVectorWidthB %u \% MIOutputVectorWidth %u must be 0" % \
-          state["GlobalLoadVectorWidthB"], state["MIOutputVectorWidth"])
+        reject(state, "GlobalLoadVectorWidthB %u %% MIOutputVectorWidth %u must be 0" % \
+          (state["GlobalLoadVectorWidthB"], state["MIOutputVectorWidth"]))
     else:
       if not bufferLoad or not state["GuaranteeNoPartialA"]:
         # Restrict GRVW/VW combos so shift-ptr logic will work
