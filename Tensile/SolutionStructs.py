@@ -1684,12 +1684,16 @@ class Solution:
       state["MIInputsPerThread"]   = 1 if state["ProblemType"]["DataType"].isSingle()   \
                                 else 2 if state["ProblemType"]["DataType"].isBFloat16() \
                                 else 4 # for FP16
-
-      state["ThreadTile0"] = state["MatrixInstBM"] * state["MIWaveTile"][0] * (state["MatrixInstM"] * state["MatrixInstN"] // globalParameters["WavefrontWidth"])
-      state["ThreadTile1"] = state["MatrixInstBN"] * state["MIWaveTile"][1]
-
-      state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
-      state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
+      if state["MatrixInstM"] == 4:
+        state["ThreadTile0"] = state["MIWaveTile"][0] * state["MIOutputVectorWidth"]
+        state["ThreadTile1"] = state["MIWaveTile"][1]
+        state["SubGroup0"]   = state["MIWaveGroup"][0] * state["MatrixInstM"] * state["MatrixInstBM"] // state["MIOutputVectorWidth"]
+        state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"] * state["MatrixInstBN"]
+      else:
+        state["ThreadTile0"] = state["MatrixInstBM"] * state["MIWaveTile"][0] * (state["MatrixInstM"] * state["MatrixInstN"] // globalParameters["WavefrontWidth"])
+        state["ThreadTile1"] = state["MatrixInstBN"] * state["MIWaveTile"][1]
+        state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
+        state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
     else:
       state["ThreadTile0"] = state["ThreadTile"][0]
       state["ThreadTile1"] = state["ThreadTile"][1]
@@ -1703,9 +1707,9 @@ class Solution:
 
     # macro tile sizes
     if "SubGroup0" in state and "ThreadTile0" in state:
-      state["MacroTile0"] = state["SubGroup0"]*state["ThreadTile0"]
+      state["MacroTile0"] = state["SubGroup0"] * state["ThreadTile0"]
     if "SubGroup1" in state and "ThreadTile1" in state:
-      state["MacroTile1"] = state["SubGroup1"]*state["ThreadTile1"]
+      state["MacroTile1"] = state["SubGroup1"] * state["ThreadTile1"]
     if "MacroTile" in state:
       if state["MacroTile0"] != state["MacroTile"][0] \
           or state["MacroTile1"] != state["MacroTile"][1]:

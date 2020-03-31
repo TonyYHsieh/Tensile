@@ -7964,12 +7964,12 @@ class KernelWriterAssembly(KernelWriter):
     MIBShape0                  = kernel["MatrixInstM"] * kernel["MatrixInstBM"]
     numContinuousOutput        = kernel["MIOutputVectorWidth"]
     numOutputThreads1          = kernel["MatrixInstN"]
-    numOutputThreads0          = numThreadInWave // numOutputThreads1
+    numOutputThreads0          = kernel["MatrixInstBM"] if (kernel["MatrixInstM"] == 4) else (numThreadInWave // numOutputThreads1)
     numSubOutputPerWave0       = numOutputThreads0 * numContinuousOutput
     numSubOutputGroupsPerWave0 = MIBShape0 // numSubOutputPerWave0
     numShiftBlock              = numContinuousOutput // glvw
     numOutputElements          = numSubOutputGroupsPerWave0 * numContinuousOutput * kernel["MIWaveTile"][0]
-    subTile1                   = kernel["MatrixInstBN"] * kernel["MIWaveTile"][1]
+    subTile1                   = kernel["MIWaveTile"][1] if (kernel["MatrixInstM"] == 4) else kernel["MatrixInstBN"] * kernel["MIWaveTile"][1]
 
     # labels for reminder of vectorwidth
     svrLabels = []
@@ -8040,8 +8040,8 @@ class KernelWriterAssembly(KernelWriter):
 
     # mRge : thread group id [0-31] or [32-63] for mfma 32x32x2
     tReg = self.vgprPool.checkOut(1)
-    kStr += vectorStaticRemainder(dummy, tReg, "Serial", numThreadInWave, tmpVgpr, tmpSgpr)
-    kStr += vectorStaticDivide(tReg, tReg, kernel["MatrixInstN"], tmpVgpr, tmpSgpr)
+    kStr += vectorStaticDivide(tReg, "Serial", kernel["MatrixInstN"], tmpVgpr, tmpSgpr)
+    kStr += vectorStaticRemainder(dummy, tReg, tReg, numOutputThreads0, tmpVgpr, tmpSgpr)
 
     # rReg : reminder of M_size % vectorwidth
     # decide to jump to block which handle this case, M_szie % vector width
@@ -8607,6 +8607,13 @@ class KernelWriterAssembly(KernelWriter):
     kStr += vectorStaticRemainder(dummy, tmpVgpr0, "Serial", kernel["MatrixInstN"], tmpVgpr1, tmpSgpr)
     kStr += inst("v_add_u32", vgpr(tid1), vgpr(tmpVgpr0), vgpr(tid1), "coordination 1 = wave_id1 + tid1")
 
+    if kernel["MatrixInstM"] == 4:
+      divisor =  kernel["MatrixInstN"] * kernel["MatrixInstBM"]
+      kStr   += vectorStaticRemainder(dummy, tmpVgpr0, "Serial", globalParameters["WavefrontWidth"], tmpVgpr1, tmpSgpr)
+      kStr   += vectorStaticDivide(tmpVgpr0, tmpVgpr0, divisor, tmpVgpr1, tmpSgpr)
+      kStr   += staticMultiply(vgpr(tmpVgpr0), vgpr(tmpVgpr0), kernel["MatrixInstN"], sgpr(tmpSgpr))
+      kStr   += inst("v_add_u32", vgpr(tid1), vgpr(tmpVgpr0), vgpr(tid1), "coordination 1 = wave_id1 + tid1")
+
     # coord 1 : offset part
     kStr += inst("v_mul_lo_u32", vgpr(self.cinRowPtr), vgpr(tid1), sgpr("StridesC"), " offset 1")
 
@@ -8617,6 +8624,8 @@ class KernelWriterAssembly(KernelWriter):
     # coord 0 : thread part
     kStr += vectorStaticRemainder(dummy, tid0, "Serial", globalParameters["WavefrontWidth"], tmpVgpr1, tmpSgpr)
     kStr += vectorStaticDivide(tid0, tid0, kernel["MatrixInstM"], tmpVgpr1, tmpSgpr)
+    if kernel["MatrixInstM"] == 4:
+      kStr += vectorStaticRemainder(dummy, tid0, tid0, kernel["MatrixInstBM"], tmpVgpr1, tmpSgpr)
     kStr += inst("v_lshlrev_b32", vgpr(tid0), hex(2), vgpr(tid0), "thread0 * 4 : mfma output 4 continuous outputs")
     kStr += inst("v_add_u32", vgpr(tid0), vgpr(tmpVgpr0), vgpr(tid0), "coordination 0 = wave_id0 + tid0")
 
@@ -8829,7 +8838,7 @@ class KernelWriterAssembly(KernelWriter):
   # (ie non-edge cases)
   ##############################################################################
   def notLocalFullTileElementsMFMA(self, kernel, edge):
-    elements = []
+    elements    = []
     vectorwidth = 0
 
     if edge:
@@ -8840,11 +8849,17 @@ class KernelWriterAssembly(KernelWriter):
       vectorwidth = kernel["StoreVectorWidth"] if kernel["VectorStore"] else 1
       vectorwidth = min(vectorwidth, self.maxGwvw(kernel))
 
-    outputsPerThread = kernel["MatrixInstM"] * kernel["MatrixInstN"] // globalParameters["WavefrontWidth"]
-    totalTT0 = kernel["MatrixInstBM"] * kernel["MIWaveTile"][0] * outputsPerThread
-    MFMAcontinoutsOuptut = 4
+    MFMAcontinoutsOuptut = kernel["MIOutputVectorWidth"]
 
-    for tt1 in range(0, kernel["MatrixInstBN"] * kernel["MIWaveTile"][1]):
+    if kernel["MatrixInstM"] == 4:
+      totalTT0             = kernel["MIWaveTile"][0] * MFMAcontinoutsOuptut
+      totalTT1             = kernel["MIWaveTile"][1]
+    else:
+      outputsPerThread     = kernel["MatrixInstM"] * kernel["MatrixInstN"] // globalParameters["WavefrontWidth"]
+      totalTT0             = kernel["MatrixInstBM"] * kernel["MIWaveTile"][0] * outputsPerThread
+      totalTT1             = kernel["MatrixInstBN"] * kernel["MIWaveTile"][1]
+
+    for tt1 in range(0, totalTT1):
       for vc1 in range(0, 1):
         for tt0 in range(0, totalTT0 // MFMAcontinoutsOuptut):
           for vc0 in range(0, MFMAcontinoutsOuptut, vectorwidth): # note step by vectorwidth
@@ -9105,12 +9120,15 @@ class KernelWriterAssembly(KernelWriter):
 
         coordOffset1 = 0
         if kernel["EnableMatrixInstruction"]:
-          bIdx1  = d1 % kernel["MatrixInstBN"]
-          wtIdex = (d1 // kernel["MatrixInstBN"]) % kernel["MIWaveTile"][1]
+          if kernel["MatrixInstM"] == 4:
+            coordOffset1 = d1 * kernel["MatrixInstN"] *  kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1] + vc1
+          else:
+            bIdx1  = d1 % kernel["MatrixInstBN"]
+            wtIdex = (d1 // kernel["MatrixInstBN"]) % kernel["MIWaveTile"][1]
 
-          coordOffset1  = bIdx1 * kernel["MatrixInstN"]
-          coordOffset1 += wtIdex * kernel["MatrixInstN"] *  kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1]
-          coordOffset1 += vc1
+            coordOffset1  = bIdx1 * kernel["MatrixInstN"]
+            coordOffset1 += wtIdex * kernel["MatrixInstN"] *  kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1]
+            coordOffset1 += vc1
         else:
           if kernel["LocalSplitU"] > 1:
             strideD1 = (kernel["NumThreads"]*kernel["VectorWidth"]//kernel["MacroTile0"])
@@ -9122,19 +9140,22 @@ class KernelWriterAssembly(KernelWriter):
 
         # gpr and offset assignments for element
         if kernel["EnableMatrixInstruction"]:
-          MFMAContinuousOutputs = 4
-          OutputsPerMIMN        = kernel["MatrixInstM"] * kernel["MatrixInstN"] // globalParameters["WavefrontWidth"]
+          if kernel["MatrixInstM"] == 4:
+            coordOffset0 = d0 * kernel["MatrixInstM"] *  kernel["MatrixInstBM"] * kernel["MIWaveGroup"][0] + vc0
+          else:
+            MFMAContinuousOutputs = kernel["MIOutputVectorWidth"]
+            OutputsPerMIMN        = kernel["MatrixInstM"] * kernel["MatrixInstN"] // globalParameters["WavefrontWidth"]
 
-          eIdx0        = d0 % (OutputsPerMIMN // MFMAContinuousOutputs)
-          remain_d0    = d0 // (OutputsPerMIMN // MFMAContinuousOutputs)
-          bIdx0        = remain_d0 % kernel["MatrixInstBM"]
-          remain_d0    = remain_d0 // kernel["MatrixInstBM"]
-          wtIdex       = remain_d0 % kernel["MIWaveTile"][0]
+            eIdx0        = d0 % (OutputsPerMIMN // MFMAContinuousOutputs)
+            remain_d0    = d0 // (OutputsPerMIMN // MFMAContinuousOutputs)
+            bIdx0        = remain_d0 % kernel["MatrixInstBM"]
+            remain_d0    = remain_d0 // kernel["MatrixInstBM"]
+            wtIdex       = remain_d0 % kernel["MIWaveTile"][0]
 
-          coordOffset0  = eIdx0  * (globalParameters["WavefrontWidth"] // kernel["MatrixInstN"]) * MFMAContinuousOutputs
-          coordOffset0 += bIdx0  * kernel["MatrixInstM"]
-          coordOffset0 += wtIdex * kernel["MatrixInstM"] *  kernel["MatrixInstBM"] * kernel["MIWaveGroup"][0]
-          coordOffset0 += vc0
+            coordOffset0  = eIdx0  * (globalParameters["WavefrontWidth"] // kernel["MatrixInstN"]) * MFMAContinuousOutputs
+            coordOffset0 += bIdx0  * kernel["MatrixInstM"]
+            coordOffset0 += wtIdex * kernel["MatrixInstM"] *  kernel["MatrixInstBM"] * kernel["MIWaveGroup"][0]
+            coordOffset0 += vc0
         else:
           coordOffset0 = d0 * kernel["SubGroup0"]*kernel["VectorWidth"] + vc0
 
@@ -9193,11 +9214,13 @@ class KernelWriterAssembly(KernelWriter):
           if elementsLoadedPerVw < elementsLoadedPerbestVw:
             bestVw = kernel["StoreVectorWidth"]
           if kernel["EnableMatrixInstruction"]:
-            MFMAContinuousOutputs = 4
-            d1_stride = ((kernel["MatrixInstM"] * kernel["MatrixInstN"]) // globalParameters["WavefrontWidth"]) * kernel["MatrixInstBM"] * kernel["MIWaveTile"][0]
-            sumIdx    = kw.startVgprValuC + vc0 + (d0 * MFMAContinuousOutputs) + (d1 * d1_stride)
+            if kernel["MatrixInstM"] == 4:
+              sumIdx    = kw.startVgprValuC + vc0 + (d0 * kernel["MIOutputVectorWidth"]) + d1 * (kernel["MIOutputVectorWidth"] * kernel["MIWaveTile"][0])
+            else:
+              d1_stride = ((kernel["MatrixInstM"] * kernel["MatrixInstN"]) // globalParameters["WavefrontWidth"]) * kernel["MatrixInstBM"] * kernel["MIWaveTile"][0]
+              sumIdx    = kw.startVgprValuC + vc0 + (d0 * kernel["MIOutputVectorWidth"]) + (d1 * d1_stride)
           else:
-            sumIdx = kw.startVgprValuC + vc0 + d0*kernel["VectorWidth"] + vc1*kernel["ThreadTile0"] + d1*kernel["VectorWidth"]*kernel["ThreadTile0"]
+            sumIdx      = kw.startVgprValuC + vc0 + d0*kernel["VectorWidth"] + vc1*kernel["ThreadTile0"] + d1*kernel["VectorWidth"]*kernel["ThreadTile0"]
         self.elementSumIdx.append(sumIdx) # sumIdx is an element idx, need to div/2 for half
         self.lastCoordOffset1 = coordOffset1
 
@@ -9705,6 +9728,7 @@ class KernelWriterAssembly(KernelWriter):
     # write possibilities and labels
     betas = [False, True] if kernel["ProblemType"]["UseBeta"] else [False]
     edges = [False, True] if self.do["EdgeWrite"] else [False]
+
     writeLabels = {}
     for beta in betas:
       writeLabels[beta] = {}
@@ -9886,7 +9910,7 @@ class KernelWriterAssembly(KernelWriter):
           # only do an even number of halves - since these share hi/lo pieces of some registers?
           if numElementsPerBatch > 1:
             numElementsPerBatch = int(numElementsPerBatch/2)*2
-          else:
+          elif not kernel["EnableMatrixInstruction"]:
             # The globalWriteBatch routine below can't handle odd elements per batch
             # and 0 elements per batch is illegal.
             # so if we don't have *GPR resources to handle a larger batch then need
@@ -9897,7 +9921,7 @@ class KernelWriterAssembly(KernelWriter):
               print("WARNING: half requires at least two elements per batch")
             self.overflowedResources = 3
 
-        assert numElementsPerBatch > 0, "numElementsPerBatch=0 for %s"%self.kernelName
+        assert numElementsPerBatch > 0, "numElementsPerBatch=0 for %s" % self.kernelName
 
         #numElementsPerBatch=min(2,numElementsPerBatch) # hack to control number of batches
         if atomic and (self.ss.optSingleColVgpr or self.ss.optSharedColVgpr):
@@ -11087,16 +11111,20 @@ class KernelWriterAssembly(KernelWriter):
     kStr = ""
     kStr += self.comment("Mapping of Acc register -> C Vgpr register")
 
-    OutputsPerMFMA1B = kernel["MatrixInstM"] * kernel["MatrixInstN"] // globalParameters["WavefrontWidth"]
+    if kernel["MatrixInstM"] == 4:
+      for i in range(0, kernel["MIOutputVectorWidth"] * kernel["MIWaveTile"][0] * kernel["MIWaveTile"][1]):
+          kStr += inst("v_accvgpr_read_b32", vgpr("ValuC+%u"%i), "acc%u"%i, "copy areg to vreg")
+    else:
+      OutputsPerMFMA1B = kernel["MatrixInstM"] * kernel["MatrixInstN"] // globalParameters["WavefrontWidth"]
 
-    for wgIdx1 in range(0, kernel["MIWaveTile"][1]):
-      for wgIdx0 in range(0, kernel["MIWaveTile"][0]):
-        for bIdx1 in range(0, kernel["MatrixInstBN"]):
-          for bIdx0 in range(0, kernel["MatrixInstBM"]):
-            for tIdx in range(0, OutputsPerMFMA1B):
-              src = tIdx + OutputsPerMFMA1B * (bIdx0 + kernel["MatrixInstBM"] * (bIdx1 + kernel["MatrixInstBN"] * (wgIdx0 + kernel["MIWaveTile"][0] * wgIdx1)))
-              dst = tIdx + OutputsPerMFMA1B * (bIdx0 + kernel["MatrixInstBM"] * (wgIdx0 + kernel["MIWaveTile"][0] * (bIdx1 + kernel["MatrixInstBN"] * wgIdx1)))
-              kStr += inst("v_accvgpr_read_b32", vgpr("ValuC+%u"%dst), "acc%u"%src, "copy areg to vreg")
+      for wgIdx1 in range(0, kernel["MIWaveTile"][1]):
+        for wgIdx0 in range(0, kernel["MIWaveTile"][0]):
+          for bIdx1 in range(0, kernel["MatrixInstBN"]):
+            for bIdx0 in range(0, kernel["MatrixInstBM"]):
+              for tIdx in range(0, OutputsPerMFMA1B):
+                src = tIdx + OutputsPerMFMA1B * (bIdx0 + kernel["MatrixInstBM"] * (bIdx1 + kernel["MatrixInstBN"] * (wgIdx0 + kernel["MIWaveTile"][0] * wgIdx1)))
+                dst = tIdx + OutputsPerMFMA1B * (bIdx0 + kernel["MatrixInstBM"] * (wgIdx0 + kernel["MIWaveTile"][0] * (bIdx1 + kernel["MatrixInstBN"] * wgIdx1)))
+                kStr += inst("v_accvgpr_read_b32", vgpr("ValuC+%u"%dst), "acc%u"%src, "copy areg to vreg")
 
     return kStr
 
