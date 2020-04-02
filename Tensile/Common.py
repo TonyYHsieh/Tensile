@@ -720,7 +720,8 @@ validParameters = {
     "LdsPadA":                     [ -1, 0, 1, 2, 3, 4, 8],
     "LdsPadB":                     [ -1, 0, 1, 2, 3, 4, 8],
 
-    "UnrollMajorLDS":              [False, True],
+    "UnrollMajorLDSA":             [False, True],
+    "UnrollMajorLDSB":             [False, True],
 
     # tinkered with adding extra syncs or waits in the assembly kernels to see if it would improve the sequencing between workgroups, "fully synchronous scheduling" is WAY more promising; this can be deprecated
     "PerformanceSyncLocation":    list(range(-1, 16*16+1)),
@@ -783,7 +784,8 @@ defaultBenchmarkCommonParameters = [
     {"KernelLanguage":            [ "Source" ] },
     {"LdsPadA":                   [ 0 ] },
     {"LdsPadB":                   [ 0 ] },
-    {"UnrollMajorLDS":            [ False ] },
+    {"UnrollMajorLDSA":           [ False ] },
+    {"UnrollMajorLDSB":           [ False ] },
     {"MaxOccupancy":              [ 40 ] },
     {"VectorWidth":               [ -1 ] },
     {"VectorStore":               [ True ] },

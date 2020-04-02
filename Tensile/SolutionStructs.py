@@ -1668,7 +1668,7 @@ class Solution:
          " in fp32 precision. Please add the following config:" + \
          "\n - HighPrecisionAccumulate: True")
     else:
-      if state["UnrollMajorLDS"]:
+      if state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]:
         reject(state, "didn't support UnrollMajorLDS in VALU mode yet")
       if state["ThreadTile"][0] > 16 or state["ThreadTile"][1] > 16:
         reject(state, "Invalid value for ThreadTile")
@@ -2525,14 +2525,17 @@ class Solution:
       assert(state["LdsPadB"] >= 0)
 
     ldsAlign = int(64 / state["ProblemType"]["DataType"].numRegisters())
-    if state["UnrollMajorLDS"]:
+    if state["UnrollMajorLDSA"]:
       ldsNumElementsA = (state["DepthU"] + state["LdsPadA"]) * state["MacroTile0"]
       ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA, ldsAlign)
-      ldsNumElementsB = (state["DepthU"] + state["LdsPadB"]) * state["MacroTile1"]
-      ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB, ldsAlign)
     else:
       ldsNumElementsA = state["DepthU"] * (state["MacroTile0"] + state["LdsPadA"])
       ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA, ldsAlign)
+
+    if state["UnrollMajorLDSB"]:
+      ldsNumElementsB = (state["DepthU"] + state["LdsPadB"]) * state["MacroTile1"]
+      ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB, ldsAlign)
+    else:
       ldsNumElementsB = state["DepthU"] * (state["MacroTile1"] + state["LdsPadB"])
       ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB, ldsAlign)
 

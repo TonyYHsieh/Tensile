@@ -1188,7 +1188,7 @@ class KernelWriterAssembly(KernelWriter):
     localReadWidth = (kernel["VectorWidth"] * tPA["bpe"]) // self.bpr
     if kernel["EnableMatrixInstruction"]:
       localReadWidth = tPA["bpe"] / self.bpr
-    if kernel["UnrollMajorLDS"]:
+    if kernel["UnrollMajorLDSA"]:
       localReadWidth *= kernel["MIInputsPerThread"]
 
     #localReadStridePerpendicular = 0
@@ -1212,7 +1212,7 @@ class KernelWriterAssembly(KernelWriter):
     localReadWidth = (kernel["VectorWidth"] * tPB["bpe"]) // self.bpr
     if kernel["EnableMatrixInstruction"]:
       localReadWidth = tPB["bpe"] / self.bpr
-    if kernel["UnrollMajorLDS"]:
+    if kernel["UnrollMajorLDSB"]:
       localReadWidth *= kernel["MIInputsPerThread"]
 
     #localReadStridePerpendicular = 0
@@ -1257,9 +1257,10 @@ class KernelWriterAssembly(KernelWriter):
 
     if kernel["EnableMatrixInstruction"]:
       self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
-      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
-      if kernel["UnrollMajorLDS"] == False:
+      if kernel["UnrollMajorLDSA"] == False:
         self.numVgprValuAPerBlock *= 2
+      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
+      if kernel["UnrollMajorLDSB"] == False:
         self.numVgprValuBPerBlock *= 2
     else:
       self.numVgprValuAPerBlock = kernel["ThreadTileA"] * tPA["bpe"]//self.bpr
@@ -4665,7 +4666,7 @@ class KernelWriterAssembly(KernelWriter):
     dotInterleave = kernel["LocalDotLayout"]
 
     if dotInterleave == 1:
-      if kernel["UnrollMajorLDS"]:
+      if kernel["UnrollMajorLDS%s" % tc]:
         lds_stride = kernel["DepthU"] + kernel["LdsPad%s"%tc]
         kStr += inst("v_mul_u32_u24", vgpr(destVgpr), hex(lds_stride), vgpr(tP["gpr"]["lwoT"]), \
             "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
@@ -4877,7 +4878,7 @@ class KernelWriterAssembly(KernelWriter):
     strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBM"]
 
     # adjust stride according to buffer dimension
-    if kernel["UnrollMajorLDS"]:
+    if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
       strideM    = kernel["DepthU"] + kernel["LdsPadA"]
       strideK    = inputPerThread
       strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBM"] * (kernel["DepthU"] + kernel["LdsPadA"])
@@ -4979,7 +4980,7 @@ class KernelWriterAssembly(KernelWriter):
     strideBN       =  kernel["MatrixInstN"]
     strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBN"]
 
-    if kernel["UnrollMajorLDS"]:
+    if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
       strideN    = kernel["DepthU"] + kernel["LdsPadB"]
       strideK    = inputPerThread
       strideBN   = kernel["MatrixInstN"] * (kernel["DepthU"] + kernel["LdsPadB"])
@@ -5927,7 +5928,7 @@ class KernelWriterAssembly(KernelWriter):
     # alloc sgpr
     tmpSgpr = self.getTmpSgpr(3)
 
-    if (numRegisters == 0.5) and (kernel["UnrollMajorLDS"] == False):
+    if (numRegisters == 0.5) and (kernel["UnrollMajorLDSA"] == False):
       inPerThread   = int(kernel["MIInputsPerThread"])
       vgrpPerThread = int(kernel["MIInputsPerThread"] * numRegisters)
 
@@ -5938,6 +5939,12 @@ class KernelWriterAssembly(KernelWriter):
             alStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a * inPerThread,   i*2+0), 1)
             ahStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a * inPerThread,   i*2+1), 1)
             kStr += inst("v_or_b32", aStr, alStr, ahStr, "pack two half to one")
+
+      s_nop = 2
+
+    if (numRegisters == 0.5) and (kernel["UnrollMajorLDSB"] == False):
+      inPerThread   = int(kernel["MIInputsPerThread"])
+      vgrpPerThread = int(kernel["MIInputsPerThread"] * numRegisters)
 
       for b in range(0, kernel["MIWaveTile"][1]):
         for iui in range(0, innerUnroll):
@@ -7209,7 +7216,7 @@ class KernelWriterAssembly(KernelWriter):
     # and compute mysterious "i"
     assert(sPerp==0 or sPara==0)
 
-    if tP["tlu"] != kernel["UnrollMajorLDS"]:
+    if tP["tlu"] != kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
       lspaOffset += sPerp & mask
       lscaOffset += sPara
       rem = (sPerp & ~mask) >> log2(ldl)
@@ -7232,10 +7239,10 @@ class KernelWriterAssembly(KernelWriter):
     # print("0lspaOffset", lspaOffset)
     # print("0lscaOffset", lscaOffset)
 
-    lds_stride = (kernel["DepthU"] + kernel["LdsPad%s"%tc]) if kernel["UnrollMajorLDS"] \
+    lds_stride = (kernel["DepthU"] + kernel["LdsPad%s"%tc]) if kernel["UnrollMajorLDS%s" % tP["tensorChar"]] \
             else (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
 
-    if tP["tlu"] != kernel["UnrollMajorLDS"]:
+    if tP["tlu"] != kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
       lspaOffset *= lds_stride
       lspaOffset += rem * ldl + perp_rem
     else:
@@ -7343,7 +7350,7 @@ class KernelWriterAssembly(KernelWriter):
             sPerp = 0
             sPara = 0
 
-            if tP["tlu"] != kernel["UnrollMajorLDS"]:
+            if tP["tlu"] != kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
               if tP["wtc"] == tP["grcv"]:
                 sPerp = s
               elif tP["wuc"] == tP["grcv"]:
@@ -7480,7 +7487,7 @@ class KernelWriterAssembly(KernelWriter):
     if self.inTailLoop:
       inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * tP["bpe"]
       if kernel["EnableMatrixInstruction"]:
-        if kernel["UnrollMajorLDS"]:
+        if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
           inc = kernel["LocalSplitU"] * tP["bpe"]
         inc *= kernel["MatrixInstK"]
       tmpSgpr = self.getTmpSgpr(1)
@@ -7494,7 +7501,7 @@ class KernelWriterAssembly(KernelWriter):
     else:
       if tP["localReadInstruction"].numOffsets == 1:
         if kernel["EnableMatrixInstruction"]:
-          if kernel["UnrollMajorLDS"]:
+          if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
             tP["localReadOffset"] += kernel["LocalSplitU"] * kernel["MatrixInstK"]
           else:
             tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * kernel["MatrixInstK"]
@@ -7613,7 +7620,7 @@ class KernelWriterAssembly(KernelWriter):
                          kernel["MatrixInstN"] * kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1] ]
     tileStride       = 1
     UnrollStride     = kernel["MacroTile%s" % tP["tensorChar"]] + kernel["LdsPad%s" % tc]
-    if kernel["UnrollMajorLDS"]:
+    if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
       tileStride     = kernel["DepthU"] + kernel["LdsPad%s"%tc]
       UnrollStride   = 1
 
