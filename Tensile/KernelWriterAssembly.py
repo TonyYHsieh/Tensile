@@ -5730,11 +5730,13 @@ class KernelWriterAssembly(KernelWriter):
       else:
         loopCounter = self.loopCounter(kernel, loopIdx)
 
-      unrollInc = 1
-      if kernel["AssertSummationElementMultiple"] % (kernel["InnerUnroll"] * kernel["MatrixInstK"]) == 0:
-        unrollInc *= kernel["InnerUnroll"]
+      unrollInc      = 1
+      KinInnerUnroll = kernel["InnerUnroll"]
       if kernel["EnableMatrixInstruction"]:
-        unrollInc *= kernel["MatrixInstK"]
+        unrollInc      *= kernel["MatrixInstK"]
+        KinInnerUnroll *= kernel["MatrixInstK"]
+      if kernel["AssertSummationElementMultiple"] % KinInnerUnroll == 0:
+        unrollInc *= kernel["InnerUnroll"]
 
       kStr += self.comment("closeLoop loop%s finalLoop=%d tailLoop=%d" % (loopChar, finalLoop, tailLoop))
 
