@@ -42,6 +42,18 @@ from .SolutionStructs import Solution, ProblemType
 from .SolutionWriter import SolutionWriter
 from .TensileCreateLibrary import writeSolutionsAndKernels, writeCMake
 
+def removeMIVALURedundant(solution):
+  newSolution = deepcopy(solution)
+  if newSolution['EnableMatrixInstruction']:
+    newSolution['WorkGroup']  = []
+    newSolution['ThreadTile'] = []
+  else:
+    newSolution['MIBlock']     = []
+    newSolution['MIWaveGroup'] = []
+    newSolution['MIWaveTile']  = []
+
+  return newSolution
+
 ################################################################################
 # Benchmark Problem Type
 ################################################################################
@@ -179,7 +191,7 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
     totalBenchmarkPermutations = 1
     for benchmarkParamName in benchmarkStep.benchmarkParameters:
       totalBenchmarkPermutations *= len(benchmarkStep.benchmarkParameters[benchmarkParamName])
-    maxPossibleSolutions = totalBenchmarkPermutations*numHardcoded
+    maxPossibleSolutions = totalBenchmarkPermutations * numHardcoded
     print1("# MaxPossibleSolutions: %u = %u (hardcoded) * %u (benchmark)" % \
         (maxPossibleSolutions, numHardcoded, totalBenchmarkPermutations))
 
@@ -221,6 +233,10 @@ def benchmarkProblemType( problemTypeConfig, problemSizeGroupConfig, \
           if initialSolutionParameterName not in solution:
             solution[initialSolutionParameterName] = \
                 benchmarkStep.initialSolutionParameters[initialSolutionParameterName]
+
+        # eliminate redundant solution
+        solution = removeMIVALURedundant(solution)
+
         # TODO check if solution matches problem size for exact tile kernels
         solutionObject = Solution(solution)
         if solutionObject["Valid"]:

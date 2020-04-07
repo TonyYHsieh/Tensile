@@ -1694,16 +1694,16 @@ class Solution:
         state["ThreadTile1"] = state["MatrixInstBN"] * state["MIWaveTile"][1]
         state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
         state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
+      state["LocalSplitU"] = 1
     else:
       state["ThreadTile0"] = state["ThreadTile"][0]
       state["ThreadTile1"] = state["ThreadTile"][1]
 
       state["SubGroup0"]   = state["WorkGroup"][0]
       state["SubGroup1"]   = state["WorkGroup"][1]
+      state["LocalSplitU"] = state["WorkGroup"][2]
 
-    state["LocalSplitU"] = state["WorkGroup"][2]
     state["NumThreads"]  = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
-
 
     # macro tile sizes
     if "SubGroup0" in state and "ThreadTile0" in state:
