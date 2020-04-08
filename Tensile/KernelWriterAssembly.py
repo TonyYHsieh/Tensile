@@ -1189,7 +1189,7 @@ class KernelWriterAssembly(KernelWriter):
     if kernel["EnableMatrixInstruction"]:
       localReadWidth = tPA["bpe"] / self.bpr
     if kernel["UnrollMajorLDSA"]:
-      localReadWidth *= kernel["MIInputsPerThread"]
+      localReadWidth *= kernel["ProblemType"]["DataType"].numMIInput()
 
     #localReadStridePerpendicular = 0
     localRead2Perpendicular = False
@@ -1213,7 +1213,7 @@ class KernelWriterAssembly(KernelWriter):
     if kernel["EnableMatrixInstruction"]:
       localReadWidth = tPB["bpe"] / self.bpr
     if kernel["UnrollMajorLDSB"]:
-      localReadWidth *= kernel["MIInputsPerThread"]
+      localReadWidth *= kernel["ProblemType"]["DataType"].numMIInput()
 
     #localReadStridePerpendicular = 0
     localRead2Perpendicular = False
@@ -1256,10 +1256,10 @@ class KernelWriterAssembly(KernelWriter):
     valuBlocks = (1+kernel["PrefetchLocalRead"]) * kernel["InnerUnroll"]
 
     if kernel["EnableMatrixInstruction"]:
-      self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
+      self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * kernel["ProblemType"]["DataType"].numMIInput() * tPA["bpe"] // self.bpr
       if kernel["UnrollMajorLDSA"] == False:
         self.numVgprValuAPerBlock *= 2
-      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["MIInputsPerThread"] * tPA["bpe"] // self.bpr
+      self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["ProblemType"]["DataType"].numMIInput() * tPA["bpe"] // self.bpr
       if kernel["UnrollMajorLDSB"] == False:
         self.numVgprValuBPerBlock *= 2
     else:
@@ -5916,7 +5916,8 @@ class KernelWriterAssembly(KernelWriter):
     loopCounterName  = self.loopCounterName(kernel, self.unrollIdx)
     accs_per_wave    = kernel["MatrixInstM"] * kernel["MatrixInstN"] * kernel["MatrixInstB"] / globalParameters["WavefrontWidth"]
     dividerFortidInK = kernel["MatrixInstN"] * kernel["MatrixInstB"]
-    vgprPerInput     = int(kernel["MIInputsPerThread"] * numRegisters)
+    numMIInput       = kernel["ProblemType"]["DataType"].numMIInput()
+    vgprPerInput     = int(numMIInput * numRegisters)
     shiftPerElement  = int(numRegisters * 32)
     elementPerVgpr   = int(1 / numRegisters)
     s_nop            = 0
@@ -5931,8 +5932,8 @@ class KernelWriterAssembly(KernelWriter):
     tmpSgpr = self.getTmpSgpr(3)
 
     if (numRegisters == 0.5) and (kernel["UnrollMajorLDSA"] == False):
-      inPerThread   = int(kernel["MIInputsPerThread"])
-      vgrpPerThread = int(kernel["MIInputsPerThread"] * numRegisters)
+      inPerThread   = int(numMIInput)
+      vgrpPerThread = int(numMIInput * numRegisters)
 
       for a in range(0, kernel["MIWaveTile"][0]):
         for iui in range(0, innerUnroll):
@@ -5945,8 +5946,8 @@ class KernelWriterAssembly(KernelWriter):
       s_nop = 2
 
     if (numRegisters == 0.5) and (kernel["UnrollMajorLDSB"] == False):
-      inPerThread   = int(kernel["MIInputsPerThread"])
-      vgrpPerThread = int(kernel["MIInputsPerThread"] * numRegisters)
+      inPerThread   = int(numMIInput)
+      vgrpPerThread = int(numMIInput * numRegisters)
 
       for b in range(0, kernel["MIWaveTile"][1]):
         for iui in range(0, innerUnroll):
@@ -5962,7 +5963,7 @@ class KernelWriterAssembly(KernelWriter):
     if tail and kernel["MatrixInstK"] > 1:
       kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
       kStr += vectorStaticDivide(kReg, kReg, dividerFortidInK, tmpVgpr, tmpSgpr)
-      kStr += staticMultiply(vgpr(kReg), vgpr(kReg), kernel["MIInputsPerThread"], sgpr(tmpSgpr))
+      kStr += staticMultiply(vgpr(kReg), vgpr(kReg), numMIInput, sgpr(tmpSgpr))
 
       # replace 0 for differnet thread
       kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index >= Size L")
@@ -5977,11 +5978,11 @@ class KernelWriterAssembly(KernelWriter):
             kStr += inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "set 0 if K_idx >= sizeL")
 
       # replace 0 for same thread
-      if kernel["MIInputsPerThread"] > 1:
+      if numMIInput > 1:
         kStr += inst("v_sub_u32",    vgpr(kReg), sgpr(loopCounterName), vgpr(kReg), "get distance between size and k index")
-        kStr += inst("v_cmp_lt_i32", sgpr(tmpSgpr,2), vgpr(kReg), kernel["MIInputsPerThread"], "set partial 0 if distance less than input per thread")
-        kStr += inst("s_and_b32",    sgpr(tmpSgpr+2), sgpr(loopCounterName), kernel["MIInputsPerThread"]-1, "get inputs for edge thread")
-        kStr += inst("s_sub_u32",    sgpr(tmpSgpr+2), kernel["MIInputsPerThread"], sgpr(tmpSgpr+2), "use shift to fill 0 for outside element")
+        kStr += inst("v_cmp_lt_i32", sgpr(tmpSgpr,2), vgpr(kReg), numMIInput, "set partial 0 if distance less than input per thread")
+        kStr += inst("s_and_b32",    sgpr(tmpSgpr+2), sgpr(loopCounterName), numMIInput-1, "get inputs for edge thread")
+        kStr += inst("s_sub_u32",    sgpr(tmpSgpr+2), numMIInput, sgpr(tmpSgpr+2), "use shift to fill 0 for outside element")
         kStr += inst("s_lshl_b32",   sgpr(tmpSgpr+2), sgpr(tmpSgpr+2), log2(shiftPerElement), "use shift to fill 0 for outside element")
         for a in range(0, kernel["MIWaveTile"][0]):
           for iui in range(0, innerUnroll):
@@ -7627,7 +7628,7 @@ class KernelWriterAssembly(KernelWriter):
       UnrollStride   = 1
 
     numVectorsPerTile = kernel["MIWaveTile"][tIdx]
-    numReadsPerVector = tP["bpe"] * kernel["MIInputsPerThread"] // int(blockWidth * 4) # bytes/register
+    numReadsPerVector = tP["bpe"] * kernel["ProblemType"]["DataType"].numMIInput() // int(blockWidth * 4) # bytes/register
     numVgpr           = int(ceil(blockWidth))
 
     valuIdx = 0

@@ -1651,29 +1651,19 @@ class Solution:
     if "Valid" not in state:
       state["Valid"] = True
 
-    if state["EnableMatrixInstruction"]:
-      if not (state["ProblemType"]["DataType"].isSingle() \
-              or state["ProblemType"]["DataType"].isBFloat16() \
-              or state["ProblemType"]["DataType"].isHalf()):
-        reject(state, "didn't support Matrix Instruction with type %s" % str(state["ProblemType"]["DataType"]))
-      if not state["MIBlock"] or len(state["MIBlock"]) != 6:
-        reject(state, "invalid MIBlock")
-      if not state["MIWaveGroup"] or len(state["MIWaveGroup"]) != 2:
-        reject(state, "invalid MIWaveGroup")
-      if not state["MIWaveTile"] or len(state["MIWaveTile"]) != 2:
-        reject(state, "invalid MIWaveTile")
-      if not state["ProblemType"]["HighPrecisionAccumulate"] and \
-         not state["ProblemType"]["DataType"].isSingle() :
-        reject(state, "Matrix instructions for half types are natively accumulated" + \
-         " in fp32 precision. Please add the following config:" + \
-         "\n - HighPrecisionAccumulate: True")
-    else:
-      if state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]:
-        reject(state, "didn't support UnrollMajorLDS in VALU mode yet")
-      if state["ThreadTile"][0] > 16 or state["ThreadTile"][1] > 16:
-        reject(state, "Invalid value for ThreadTile")
+    EnableMatrixInstruction = state["EnableMatrixInstruction"] if "EnableMatrixInstruction" in state else None
+    if EnableMatrixInstruction == None:
+      if  ("MIBlock" in state and len(state["MIBlock"]) == 6) \
+          and ("MIWaveGroup" in state and len(state["MIWaveGroup"]) == 2) \
+          and ("MIWaveTile" in state and len(state["MIWaveTile"]) == 2):
+        EnableMatrixInstruction = True
+      elif ("WorkGroup" in state and len(state["WorkGroup"]) == 3) \
+          and ("ThreadTile" in state and len(state["ThreadTile"]) == 2) :
+        EnableMatrixInstruction = False
+      else:
+        reject(state, "EnableMatrixInstruction undetermined")
 
-    if state["EnableMatrixInstruction"]:
+    if EnableMatrixInstruction == True:
       state["MatrixInstM"]         = state["MIBlock"][0]
       state["MatrixInstN"]         = state["MIBlock"][1]
       state["MatrixInstK"]         = state["MIBlock"][2]
@@ -1681,9 +1671,6 @@ class Solution:
       state["MatrixInstBM"]        = state["MIBlock"][4]
       state["MatrixInstBN"]        = state["MIBlock"][5]
       state["MIOutputVectorWidth"] = 4
-      state["MIInputsPerThread"]   = 1 if state["ProblemType"]["DataType"].isSingle()   \
-                                else 2 if state["ProblemType"]["DataType"].isBFloat16() \
-                                else 4 # for FP16
       if state["MatrixInstM"] == 4:
         state["ThreadTile0"] = state["MIWaveTile"][0] * state["MIOutputVectorWidth"]
         state["ThreadTile1"] = state["MIWaveTile"][1]
@@ -1695,7 +1682,7 @@ class Solution:
         state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
         state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
       state["LocalSplitU"] = 1
-    else:
+    elif EnableMatrixInstruction == False:
       state["ThreadTile0"] = state["ThreadTile"][0]
       state["ThreadTile1"] = state["ThreadTile"][1]
 
@@ -1703,7 +1690,8 @@ class Solution:
       state["SubGroup1"]   = state["WorkGroup"][1]
       state["LocalSplitU"] = state["WorkGroup"][2]
 
-    state["NumThreads"]  = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
+    if "SubGroup0" in state and "SubGroup1" in state and "LocalSplitU" in state:
+      state["NumThreads"]  = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
 
     # macro tile sizes
     if "SubGroup0" in state and "ThreadTile0" in state:
@@ -2059,9 +2047,29 @@ class Solution:
       state["LoopIters"] = state["LoopUnroll"]
 
     if state["EnableMatrixInstruction"]:
-      if not (state["ProblemType"]["DataType"].toChar() in validMFMA and \
-        state["MIBlock"] in validMFMA[state["ProblemType"]["DataType"].toChar()]):
+      if not (state["ProblemType"]["DataType"].toChar() in validMFMA \
+              and state["MIBlock"] in validMFMA[state["ProblemType"]["DataType"].toChar()]):
         reject(state, "MIBlock %s not valid for DataType %s" % (state["MIBlock"], state["ProblemType"]["DataType"]))
+      if not (state["ProblemType"]["DataType"].isSingle() \
+              or state["ProblemType"]["DataType"].isBFloat16() \
+              or state["ProblemType"]["DataType"].isHalf()):
+        reject(state, "didn't support Matrix Instruction with type %s" % str(state["ProblemType"]["DataType"]))
+      if not state["MIBlock"] or len(state["MIBlock"]) != 6:
+        reject(state, "invalid MIBlock")
+      if not state["MIWaveGroup"] or len(state["MIWaveGroup"]) != 2:
+        reject(state, "invalid MIWaveGroup")
+      if not state["MIWaveTile"] or len(state["MIWaveTile"]) != 2:
+        reject(state, "invalid MIWaveTile")
+      if not state["ProblemType"]["HighPrecisionAccumulate"] \
+         and not state["ProblemType"]["DataType"].isSingle() :
+        reject(state, "Matrix instructions for half types are natively accumulated" + \
+         " in fp32 precision. Please add the following config:" + \
+         "\n - HighPrecisionAccumulate: True")
+    else:
+      if state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]:
+        reject(state, "didn't support UnrollMajorLDS in VALU mode yet")
+      if state["ThreadTile0"] > 16 or state["ThreadTile1"] > 16:
+        reject(state, "Invalid value for ThreadTile")
 
     if state["ProblemType"]["Tensor0"]==0:
       state["ThreadTileA"] = state["ThreadTile0"]
