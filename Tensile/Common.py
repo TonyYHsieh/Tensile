@@ -720,6 +720,8 @@ validParameters = {
     "LdsPadA":                     [ -1, 0, 1, 2, 3, 4, 8],
     "LdsPadB":                     [ -1, 0, 1, 2, 3, 4, 8],
 
+    "LdsBlockSizePerPad":          [ 0, 64, 128, 256 ],
+
     "UnrollMajorLDSA":             [False, True],
     "UnrollMajorLDSB":             [False, True],
 
@@ -784,6 +786,7 @@ defaultBenchmarkCommonParameters = [
     {"KernelLanguage":            [ "Source" ] },
     {"LdsPadA":                   [ 0 ] },
     {"LdsPadB":                   [ 0 ] },
+    {"LdsBlockSizePerPad":        [ 0 ] },
     {"UnrollMajorLDSA":           [ False ] },
     {"UnrollMajorLDSB":           [ False ] },
     {"MaxOccupancy":              [ 40 ] },

@@ -2040,6 +2040,8 @@ class Solution:
       print1("in assignDerivedParameters, state['Valid'] = False")
       return
 
+    bpeAB = int(4*state["ProblemType"]["DataType"].numRegisters())
+
     # Init LoopIters parameter in case of early exit
     # For backwards compatibility with older yaml files
     state["LoopIters"] = 0
@@ -2065,9 +2067,16 @@ class Solution:
         reject(state, "Matrix instructions for half types are natively accumulated" + \
          " in fp32 precision. Please add the following config:" + \
          "\n - HighPrecisionAccumulate: True")
+      if (state["LdsBlockSizePerPad"] != 0):
+        if (not state["UnrollMajorLDSA"]) or (not state["UnrollMajorLDSB"]):
+          reject(state, "didn't support LdsBlockSizePerPad on tile major LDS yet")
+        if state["LdsBlockSizePerPad"] < state["DepthU"]:
+          reject(state, "reject: DepthU %u > LdsBlockSizePerPad %u" % (state["DepthU"], state["LdsBlockSizePerPad"]))
     else:
       if state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]:
         reject(state, "didn't support UnrollMajorLDS in VALU mode yet")
+      if (state["LdsBlockSizePerPad"] != 0):
+        reject(state, "didn't support LdsBlockSizePerPad in VALU mode yet")
       if state["ThreadTile0"] > 16 or state["ThreadTile1"] > 16:
         reject(state, "Invalid value for ThreadTile")
 
@@ -2171,7 +2180,6 @@ class Solution:
     #print("PackedC1IdxChars", state["PackedC1IdxChars"])
 
     # Set up stagger shift:
-    bpeAB = int(4*state["ProblemType"]["DataType"].numRegisters())
     # (1<<staggerStrideShift) is number of loop iterations to traverse the stride
     try:
         staggerStrideShift = (int)(math.ceil(math.log(state["StaggerUStride"] / \
@@ -2533,8 +2541,11 @@ class Solution:
       assert(state["LdsPadB"] >= 0)
 
     ldsAlign = int(64 / state["ProblemType"]["DataType"].numRegisters())
+    padInterval = state["LdsBlockSizePerPad"] // bpeAB
     if state["UnrollMajorLDSA"]:
       ldsNumElementsA = (state["DepthU"] + state["LdsPadA"]) * state["MacroTile0"]
+      if state["LdsBlockSizePerPad"] != 0:
+        ldsNumElementsA = int((state["DepthU"] * state["MacroTile0"]) / padInterval * (padInterval + state["LdsPadA"]))
       ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA, ldsAlign)
     else:
       ldsNumElementsA = state["DepthU"] * (state["MacroTile0"] + state["LdsPadA"])
@@ -2542,6 +2553,8 @@ class Solution:
 
     if state["UnrollMajorLDSB"]:
       ldsNumElementsB = (state["DepthU"] + state["LdsPadB"]) * state["MacroTile1"]
+      if state["LdsBlockSizePerPad"] != 0:
+        ldsNumElementsB = int((state["DepthU"] * state["MacroTile1"]) / padInterval * (padInterval + state["LdsPadB"]))
       ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB, ldsAlign)
     else:
       ldsNumElementsB = state["DepthU"] * (state["MacroTile1"] + state["LdsPadB"])

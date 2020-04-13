@@ -4655,6 +4655,7 @@ class KernelWriterAssembly(KernelWriter):
   def lwaFirstOffset(self, kernel, tP):
     kStr = ""
     tc = tP["tensorChar"]
+    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
     #"lwFOA = lwA%s + lwA%s*MT%s" \
     #    % (tP["tileChar"], self.unrollChar, tP["tileChar"])
     uReg = tP["gpr"]["uReg2" if kernel["GlobalSplitU"] > 1 else "uReg"]
@@ -4667,17 +4668,26 @@ class KernelWriterAssembly(KernelWriter):
 
     if dotInterleave == 1:
       if kernel["UnrollMajorLDS%s" % tc]:
-        lds_stride = kernel["DepthU"] + kernel["LdsPad%s"%tc]
+        lds_stride = kernel["DepthU"] + LdsPad
         kStr += inst("v_mul_u32_u24", vgpr(destVgpr), hex(lds_stride), vgpr(tP["gpr"]["lwoT"]), \
             "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
         kStr += inst("_v_add_lshl_u32", vgpr(destVgpr), vgpr(uReg), vgpr(destVgpr), hex(log2(tP["bpe"])), \
             "lwFO%s = (lw%s%s + lw%s%s*(MT%s+PAD))*bpe" % (tc, tc, tc, tc, self.unrollChar, tP["tileChar"]) )
       else:
-        lds_stride = kernel["MacroTile%s"%tP["tensorChar"]] + kernel["LdsPad%s"%tc]
+        lds_stride = kernel["MacroTile%s"%tP["tensorChar"]] + LdsPad
         kStr += inst("v_mul_u32_u24", vgpr(destVgpr), hex(lds_stride), vgpr(uReg), \
             "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
         kStr += inst("_v_add_lshl_u32", vgpr(destVgpr), vgpr(tP["gpr"]["lwoT"]), vgpr(destVgpr), hex(log2(tP["bpe"])), \
             "lwFO%s = (lw%s%s + lw%s%s*(MT%s+PAD))*bpe" % (tc, tc, tc, tc, self.unrollChar, tP["tileChar"]) )
+
+      # LdsBlockSizePerPad: add padding
+      if kernel["LdsBlockSizePerPad"] != 0:
+        tmpVgpr = self.vgprPool.checkOut(2)
+        tmpSgpr = self.getTmpSgpr(1)
+        kStr += vectorStaticDivide(uReg, destVgpr, kernel["LdsBlockSizePerPad"], tmpVgpr, tmpSgpr)
+        kStr += staticMultiply(vgpr(uReg), vgpr(uReg), kernel["LdsPad%s"%tc] * tP["bpe"], sgpr(tmpSgpr))
+        kStr += inst("v_add_u32", vgpr(destVgpr), vgpr(uReg), vgpr(destVgpr), "")
+        self.vgprPool.checkIn(tmpVgpr)
     else:
       ldlOffsetVgpr = self.vgprPool.checkOut(1, "ldlOffsetVgpr", self.preventVgprOverflowDuringNewTile)
       uRegScrap = self.vgprPool.checkOut(1, "uRegScrap", self.preventVgprOverflowDuringNewTile)
@@ -4713,7 +4723,7 @@ class KernelWriterAssembly(KernelWriter):
           "shift scrap by LDL")
       kStr += inst("v_mul_u32_u24", \
           vgpr(uReg), \
-          hex(kernel["MacroTile%s"%tP["tensorChar"]] + kernel["LdsPad%s"%tc]), \
+          hex(kernel["MacroTile%s"%tP["tensorChar"]] + LdsPad), \
           vgpr(uReg), \
           "lw%s%s**(MT%s + PAD)"%(tP["tensorChar"], self.unrollChar, tP["tensorChar"]))
       kStr += inst("_v_add_co_u32", \
@@ -4870,18 +4880,19 @@ class KernelWriterAssembly(KernelWriter):
 
     # get constant parameter
     dividendReg    = "Serial" # local serial
+    LdsPad         = kernel["LdsPadA"] if kernel["LdsBlockSizePerPad"] == 0 else 0
     MIBShape0      = kernel["MatrixInstM"] * kernel["MatrixInstBM"] # matrix instruction MN shape for M
     dividendForK   = kernel["MatrixInstM"] * kernel["MatrixInstB"]
     inputPerThread = kernel["MatrixInstM"] * kernel["MatrixInstK"] * kernel["MatrixInstB"] // globalParameters["WavefrontWidth"]
     strideM        = 1
-    strideK        = (kernel["MacroTile0"] + kernel["LdsPadA"]) * inputPerThread
+    strideK        = (kernel["MacroTile0"] + LdsPad) * inputPerThread
     strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBM"]
 
     # adjust stride according to buffer dimension
     if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
-      strideM    = kernel["DepthU"] + kernel["LdsPadA"]
+      strideM    = kernel["DepthU"] + LdsPad
       strideK    = inputPerThread
-      strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBM"] * (kernel["DepthU"] + kernel["LdsPadA"])
+      strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBM"] * strideM
 
     # thread offset
     kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
@@ -4973,18 +4984,19 @@ class KernelWriterAssembly(KernelWriter):
 
     # get constant parameter
     dividendReg    = "Serial" # local serial
+    LdsPad         = kernel["LdsPadB"] if kernel["LdsBlockSizePerPad"] == 0 else 0
     dividendForK   = kernel["MatrixInstN"] * kernel["MatrixInstB"]
     inputPerThread = kernel["MatrixInstN"] * kernel["MatrixInstK"] * kernel["MatrixInstB"] // globalParameters["WavefrontWidth"]
     strideN        = 1
-    strideK        = (kernel["MacroTile1"] + kernel["LdsPadB"]) * inputPerThread
+    strideK        = (kernel["MacroTile1"] + LdsPad) * inputPerThread
     strideBN       =  kernel["MatrixInstN"]
     strideWave     = kernel["MatrixInstM"] * kernel["MatrixInstBN"]
 
     if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
-      strideN    = kernel["DepthU"] + kernel["LdsPadB"]
+      strideN    = kernel["DepthU"] + LdsPad
       strideK    = inputPerThread
-      strideBN   = kernel["MatrixInstN"] * (kernel["DepthU"] + kernel["LdsPadB"])
-      strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBN"] * (kernel["DepthU"] + kernel["LdsPadB"])
+      strideBN   = kernel["MatrixInstN"] * strideN
+      strideWave = kernel["MatrixInstM"] * kernel["MatrixInstBN"] * strideN
 
 
     # thread offset
@@ -5053,6 +5065,7 @@ class KernelWriterAssembly(KernelWriter):
     dividendReg = "Serial"
     tIdx        = tP["tensorIdx"]
     tc          = tP["tensorChar"]
+    LdsPad      = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
     divisor     = kernel["SubGroup0"] * kernel["SubGroup1"]
 
     # generate instruction
@@ -5061,7 +5074,7 @@ class KernelWriterAssembly(KernelWriter):
 
     kStr += inst("s_mov_b32", \
         sgpr(tmpSgpr), \
-        hex(kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc]), \
+        hex(kernel["MacroTile%u"%tP["tensorIdx"]] + LdsPad), \
         "MT%u+PAD"%tP["tensorIdx"] )
 
     kStr += inst("v_mul_lo_u32", \
@@ -5114,8 +5127,9 @@ class KernelWriterAssembly(KernelWriter):
     dividendReg = "Serial"
     tc          = tP["tensorChar"]
     tIdx        = tP["tensorIdx"]
+    LdsPad      = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
     divisor     = kernel["SubGroup0"] * kernel["SubGroup1"]
-    mtAddPad    = kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc]
+    mtAddPad    = kernel["MacroTile%u"%tP["tensorIdx"]] + LdsPad
 
     # LSU offset
     kStr += vectorStaticDivideAndRemainder(sgid, rReg, dividendReg, divisor, tmpVgpr, tmpSgpr)
@@ -5124,6 +5138,12 @@ class KernelWriterAssembly(KernelWriter):
 
     # final offset
     kStr += inst("_v_add_lshl_u32", vgpr("LocalReadAddr%s"%tc), vgpr(sgid), vgpr(tP["gpr"]["lro"]), hex(log2(tP["bpe"])), "o = (lro%s*VW+sgid*MT%u)*bpe"%(tc, tIdx) )
+
+    # LdsBlockSizePerPad: add padding
+    if kernel["LdsBlockSizePerPad"] != 0:
+      kStr += vectorStaticDivide(rReg, "LocalReadAddr%s"%tc, kernel["LdsBlockSizePerPad"], tmpVgpr, tmpSgpr)
+      kStr += staticMultiply(vgpr(rReg), vgpr(rReg), kernel["LdsPad%s"%tc] * tP["bpe"], sgpr(tmpSgpr))
+      kStr += inst("v_add_u32", vgpr("LocalReadAddr%s"%tc), vgpr(rReg), vgpr("LocalReadAddr%s"%tc), "")
 
     # release resources
     self.vgprPool.checkIn(tmpVgpr)
@@ -5811,8 +5831,8 @@ class KernelWriterAssembly(KernelWriter):
           # recover the 'damage' done to LRO:
           stmp = self.getTmpSgpr(1)
           for tP in [self.tPA, self.tPB]:
-            tc = tP["tensorChar"]
-            inc = kernel["LocalSplitU"]*(kernel["MacroTile%u"%tP["tensorIdx"]]+kernel["LdsPad%s"%tc])*tP["bpe"]
+            LdsPad = kernel["LdsPad%s" % tP["tensorChar"]] if kernel["LdsBlockSizePerPad"] == 0 else 0
+            inc = kernel["LocalSplitU"]*(kernel["MacroTile%u"%tP["tensorIdx"]]+LdsPad)*tP["bpe"]
             kStr += inst("s_mov_b32", sgpr(stmp), inc, "tailloop lds offset")
             kStr += inst("s_mul_i32", sgpr(stmp), sgpr("OrigLoopCounter"), sgpr(stmp), "scale by mul")
             kStr += inst("v_sub_u32", vgpr("LocalReadAddr%s"%tc), vgpr("LocalReadAddr%s"%tc), sgpr(stmp), "remove lro damage")
@@ -7242,8 +7262,9 @@ class KernelWriterAssembly(KernelWriter):
     # print("0lspaOffset", lspaOffset)
     # print("0lscaOffset", lscaOffset)
 
-    lds_stride = (kernel["DepthU"] + kernel["LdsPad%s"%tc]) if kernel["UnrollMajorLDS%s" % tP["tensorChar"]] \
-            else (kernel[tP["mt"]] + kernel["LdsPad%s"%tc])
+    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    lds_stride = (kernel["DepthU"] + LdsPad) if kernel["UnrollMajorLDS%s" % tP["tensorChar"]] \
+            else (kernel[tP["mt"]] + LdsPad)
 
     if tP["tlu"] != kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
       lspaOffset *= lds_stride
@@ -7263,6 +7284,9 @@ class KernelWriterAssembly(KernelWriter):
     offsetElements = (lspaOffset + lscaOffset)
     # print("offsetElements", offsetElements)
     offsetBytes = offsetElements*tP["bpe"]
+
+    if kernel["LdsBlockSizePerPad"] != 0:
+      offsetBytes = offsetBytes + (offsetBytes // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
 
     offsetBytes += tP["localWriteSwapByteOffset"]
 
@@ -7486,9 +7510,10 @@ class KernelWriterAssembly(KernelWriter):
     kStr = ""
 
     tc = tP["tensorChar"]
+    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
 
     if self.inTailLoop:
-      inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * tP["bpe"]
+      inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + LdsPad) * tP["bpe"]
       if kernel["EnableMatrixInstruction"]:
         if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
           inc = kernel["LocalSplitU"] * tP["bpe"]
@@ -7507,12 +7532,12 @@ class KernelWriterAssembly(KernelWriter):
           if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
             tP["localReadOffset"] += kernel["LocalSplitU"] * kernel["MatrixInstK"]
           else:
-            tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc]) * kernel["MatrixInstK"]
+            tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + LdsPad) * kernel["MatrixInstK"]
         else:
-          tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + kernel["LdsPad%s"%tc])
+          tP["localReadOffset"] += kernel["LocalSplitU"] * (kernel["MacroTile%u"%tP["tensorIdx"]] + LdsPad)
         kStr += self.comment1("N/A, lro->%d" % tP["localReadOffset"])
       else:
-        inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + kernel["LdsPad%s" % tc])
+        inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + LdsPad)
         kStr += inst("_v_add_co_u32", \
             vgpr("LocalReadAddr%s"%tP["tensorChar"]), \
             "vcc", \
@@ -7621,10 +7646,12 @@ class KernelWriterAssembly(KernelWriter):
     blockWidth       = instruction.blockWidth
     MIWaveGropuShape = [ kernel["MatrixInstM"] * kernel["MatrixInstBM"] * kernel["MIWaveGroup"][0], \
                          kernel["MatrixInstN"] * kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1] ]
+
+    LdsPad           = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
     tileStride       = 1
-    UnrollStride     = kernel["MacroTile%s" % tP["tensorChar"]] + kernel["LdsPad%s" % tc]
+    UnrollStride     = kernel["MacroTile%s" % tP["tensorChar"]] + LdsPad
     if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
-      tileStride     = kernel["DepthU"] + kernel["LdsPad%s"%tc]
+      tileStride     = kernel["DepthU"] + LdsPad
       UnrollStride   = 1
 
     numVectorsPerTile = kernel["MIWaveTile"][tIdx]
@@ -7643,8 +7670,10 @@ class KernelWriterAssembly(KernelWriter):
 
         for oIdx in range(0, numOffsets):
           offset_val = (vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx] * tileStride
-          offset_val = rIdx * UnrollStride + offset_val + tP["localReadOffset"]
-          offset_val = offset_val * tP["bpe"] + tP["localReadSwapByteOffset"]
+          offset_val = (rIdx * UnrollStride + offset_val + tP["localReadOffset"]) * tP["bpe"]
+          if kernel["LdsBlockSizePerPad"] != 0:
+            offset_val = offset_val + (offset_val // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
+          offset_val = offset_val + tP["localReadSwapByteOffset"]
           paramList.append(int(offset_val))
 
         paramTuple = tuple(paramList)
