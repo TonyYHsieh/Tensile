@@ -2020,6 +2020,46 @@ class Solution:
 
     return True
 
+
+  ########################################
+  # determine can we use DirectToLds
+  @staticmethod
+  def isDirectToLdsDoable(state, tc):
+    numBytes = state["ProblemType"]["DataType"].numBytes()
+
+    if state["ProblemType"]["DataType"].isHalf() and state["AssertSummationElementMultiple"] % 2 != 0:
+      return False
+
+    if state["ProblemType"]["DataType"].isBFloat16() and state["AssertSummationElementMultiple"] % 2 != 0:
+      return False
+
+    if state["NumThreads"] % globalParameters["WavefrontWidth"] != 0:
+      return False
+
+    if state["GlobalLoadVectorWidth%c" % tc] * numBytes != 4:
+      return False
+
+    if state["ProblemType"]["TLU%c" % tc] == state["UnrollMajorLDS%c" % tc]:
+      return False
+
+    if state["LSC%c" % tc] * state["LSP%c" % tc] * numBytes != state["NumThreads"] * 4:
+      return False
+
+    if (state["LdsBlockSizePerPad"] == 0) \
+        and (state["LdsPad%c" % tc] != 0) \
+        and ((state["LSC%c" % tc] * numBytes) != (state["NumThreads"] * 4)):
+#        and ((state["LSC%c" % tc] * numBytes) % (globalParameters["WavefrontWidth"] * 4) != 0):
+      return False
+
+    if (state["LdsBlockSizePerPad"] != 0) \
+        and (state["LdsPad%c" % tc] != 0) \
+        and (state["LdsBlockSizePerPad"] != globalParameters["WavefrontWidth"] * 4):
+#        and (state["LdsBlockSizePerPad"] % (globalParameters["WavefrontWidth"] * 4) != 0):
+      return False
+
+    return True
+
+
   ########################################
   # assign all derived parameters
   @staticmethod
@@ -2640,30 +2680,13 @@ class Solution:
     # The LSC (load size coalesced) must load some multiple of 256 bytes since that is what each DirectToLds load provides
     # Note for these matrices LSC is same as MacroTile dim
     if state["DirectToLds"]:
-      # The tail loop requires half summation elements be a multiple of two to use DirectToLds feature
-      elementMultipleOk = not state["ProblemType"]["DataType"].isHalf() or state["AssertSummationElementMultiple"] % 2 == 0
+      if Solution.isDirectToLdsDoable(state, 'A'):
+        state["DirectToLdsA"] = True
+        state["LocalWriteUseSgprA"] = True
 
-      wavefronts = state["NumThreads"] // globalParameters["WavefrontWidth"]
-      numBytes = state["ProblemType"]["DataType"].numBytes()
-
-      # DirectToLds loads return 256 bytes/wave
-      # If fractional, ensure we are using all of the bytes that will be delivered
-
-      if elementMultipleOk and state["NumThreads"] % globalParameters["WavefrontWidth"] == 0:
-
-        if (state["GlobalLoadVectorWidthA"] * numBytes == 4) \
-          and state["ProblemType"]["TransposeA"] == state["UnrollMajorLDSA"] \
-          and state["LSCA"] * state["LSPB"] *  numBytes == 256 * wavefronts \
-          and state["LSCA"] * state["LSPB"] *  numBytes == state["NumThreads"] * 4 :
-          state["DirectToLdsA"] = True
-          state["LocalWriteUseSgprA"] = True
-
-        if (state["GlobalLoadVectorWidthB"] * numBytes == 4) \
-          and state["ProblemType"]["TransposeB"] != state["UnrollMajorLDSB"] \
-          and state["LSCB"] * state["LSPB"] * numBytes == 256 * wavefronts \
-          and state["LSCB"] * state["LSPB"] *  numBytes == state["NumThreads"] * 4 :
-          state["DirectToLdsB"] = True
-          state["LocalWriteUseSgprB"] = True
+      if Solution.isDirectToLdsDoable(state, 'B'):
+        state["DirectToLdsB"] = True
+        state["LocalWriteUseSgprB"] = True
 
       if 0:
         print("DirectToLds Conditions (elementMultipleOk=", elementMultipleOk, \
