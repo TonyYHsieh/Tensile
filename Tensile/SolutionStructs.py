@@ -2641,8 +2641,7 @@ class Solution:
     # Note for these matrices LSC is same as MacroTile dim
     if state["DirectToLds"]:
       # The tail loop requires half summation elements be a multiple of two to use DirectToLds feature
-      elementMultipleOk = not state["ProblemType"]["DataType"].isHalf() \
-                          or state["AssertSummationElementMultiple"] % 2 == 0
+      elementMultipleOk = not state["ProblemType"]["DataType"].isHalf() or state["AssertSummationElementMultiple"] % 2 == 0
 
       wavefronts = state["NumThreads"] // globalParameters["WavefrontWidth"]
       numBytes = state["ProblemType"]["DataType"].numBytes()
@@ -2650,21 +2649,19 @@ class Solution:
       # DirectToLds loads return 256 bytes/wave
       # If fractional, ensure we are using all of the bytes that will be delivered
 
-      if elementMultipleOk \
-        and state["NumThreads"] % globalParameters["WavefrontWidth"] == 0:
+      if elementMultipleOk and state["NumThreads"] % globalParameters["WavefrontWidth"] == 0:
 
         if (state["GlobalLoadVectorWidthA"] * numBytes == 4) \
-          and not state["ProblemType"]["TransposeA"] \
-          and state["LSCA"] * numBytes == 256 * wavefronts \
-          and state["LSCA"] * numBytes == state["NumThreads"] * 4 :
+          and state["ProblemType"]["TransposeA"] == state["UnrollMajorLDSA"] \
+          and state["LSCA"] * state["LSPB"] *  numBytes == 256 * wavefronts \
+          and state["LSCA"] * state["LSPB"] *  numBytes == state["NumThreads"] * 4 :
           state["DirectToLdsA"] = True
           state["LocalWriteUseSgprA"] = True
 
-        if (state["GlobalLoadVectorWidthB"] * state["ProblemType"]["DataType"].numBytes() == 4) \
-          and state["ProblemType"]["TransposeB"] \
-          and elementMultipleOk \
-          and state["LSCB"] * numBytes == 256 * wavefronts \
-          and state["LSCB"] * numBytes == state["NumThreads"] * 4 :
+        if (state["GlobalLoadVectorWidthB"] * numBytes == 4) \
+          and state["ProblemType"]["TransposeB"] != state["UnrollMajorLDSB"] \
+          and state["LSCB"] * state["LSPB"] * numBytes == 256 * wavefronts \
+          and state["LSCB"] * state["LSPB"] *  numBytes == state["NumThreads"] * 4 :
           state["DirectToLdsB"] = True
           state["LocalWriteUseSgprB"] = True
 

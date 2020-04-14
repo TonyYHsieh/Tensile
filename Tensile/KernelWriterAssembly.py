@@ -4681,7 +4681,7 @@ class KernelWriterAssembly(KernelWriter):
             "lwFO%s = (lw%s%s + lw%s%s*(MT%s+PAD))*bpe" % (tc, tc, tc, tc, self.unrollChar, tP["tileChar"]) )
 
       # LdsBlockSizePerPad: add padding
-      if kernel["LdsBlockSizePerPad"] != 0:
+      if (kernel["LdsBlockSizePerPad"] != 0) and (kernel["LdsPad%s"%tc] != 0):
         tmpVgpr = self.vgprPool.checkOut(2)
         tmpSgpr = self.getTmpSgpr(1)
         kStr += vectorStaticDivide(uReg, destVgpr, kernel["LdsBlockSizePerPad"], tmpVgpr, tmpSgpr)
@@ -5140,7 +5140,7 @@ class KernelWriterAssembly(KernelWriter):
     kStr += inst("_v_add_lshl_u32", vgpr("LocalReadAddr%s"%tc), vgpr(sgid), vgpr(tP["gpr"]["lro"]), hex(log2(tP["bpe"])), "o = (lro%s*VW+sgid*MT%u)*bpe"%(tc, tIdx) )
 
     # LdsBlockSizePerPad: add padding
-    if kernel["LdsBlockSizePerPad"] != 0:
+    if (kernel["LdsBlockSizePerPad"] != 0) and (kernel["LdsPad%s"%tc] != 0):
       kStr += vectorStaticDivide(rReg, "LocalReadAddr%s"%tc, kernel["LdsBlockSizePerPad"], tmpVgpr, tmpSgpr)
       kStr += staticMultiply(vgpr(rReg), vgpr(rReg), kernel["LdsPad%s"%tc] * tP["bpe"], sgpr(tmpSgpr))
       kStr += inst("v_add_u32", vgpr("LocalReadAddr%s"%tc), vgpr(rReg), vgpr("LocalReadAddr%s"%tc), "")
@@ -6803,9 +6803,10 @@ class KernelWriterAssembly(KernelWriter):
 
                 if kernel["DirectToLds%s"%tc]:
                   if directToLdsLoads != 0:
-                    ldsInc = kernel["NumThreads"]*4
-                    kStr += inst("s_add_u32", "m0", "m0", ldsInc, \
-                        "Move LDS write address to next line" )
+                    ldsInc = kernel["NumThreads"] * 4
+                    if kernel["LdsBlockSizePerPad"] != 0:
+                      ldsInc += (ldsInc // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
+                    kStr += inst("s_add_u32", "m0", "m0", ldsInc, "Move LDS write address to next line" )
                   directToLdsLoads+=1
 
                   # Assembler expects a destination VGPR even though not written
@@ -7068,7 +7069,6 @@ class KernelWriterAssembly(KernelWriter):
                 loadModule.addCode(codeMod)
 
               if kernel["DirectToLds%s"%tc]:
-
                 # Get offset (for checking, see comment below) and comment:
                 (checkOffset, iDummy, comment) = \
                     self.calculateLdsWriteOffset(perp, para, sPerp, sPara, kernel, tP, 0)
@@ -7077,13 +7077,14 @@ class KernelWriterAssembly(KernelWriter):
                 # Therefore we double-check here to ensure the desired LDS write offset
                 # is moving at NumThreads*4.  This should already be guaranteed since
                 # we only use direct-to-lds for non-transpose cases but double-check here.
-                ldsInc = kernel["NumThreads"]*4
+                ldsInc = kernel["NumThreads"] * 4
+                if kernel["LdsBlockSizePerPad"] != 0:
+                  ldsInc += (ldsInc // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
                 #print ("checkOffset=", checkOffset, "ldsOffset=", ldsOffset, "ldsInc=", ldsInc)
 
-
                 if directToLdsLoads != 0:
-                  loadModule.addInst("s_add_u32", "m0", "m0", ldsInc, \
-                      "Move LDS write address to next line" )
+                  loadModule.addInst("s_add_u32", "m0", "m0", ldsInc, "Move LDS write address to next line" )
+
                 directToLdsLoads+=1
                 ldsOffset += ldsInc
                 destVgpr=0
@@ -7285,7 +7286,7 @@ class KernelWriterAssembly(KernelWriter):
     # print("offsetElements", offsetElements)
     offsetBytes = offsetElements*tP["bpe"]
 
-    if kernel["LdsBlockSizePerPad"] != 0:
+    if (kernel["LdsBlockSizePerPad"] != 0) and (kernel["LdsPad%s"%tc] != 0):
       offsetBytes = offsetBytes + (offsetBytes // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
 
     offsetBytes += tP["localWriteSwapByteOffset"]
@@ -7671,7 +7672,7 @@ class KernelWriterAssembly(KernelWriter):
         for oIdx in range(0, numOffsets):
           offset_val = (vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx] * tileStride
           offset_val = (rIdx * UnrollStride + offset_val + tP["localReadOffset"]) * tP["bpe"]
-          if kernel["LdsBlockSizePerPad"] != 0:
+          if (kernel["LdsBlockSizePerPad"] != 0) and (kernel["LdsPad%s"%tc] != 0):
             offset_val = offset_val + (offset_val // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
           offset_val = offset_val + tP["localReadSwapByteOffset"]
           paramList.append(int(offset_val))
