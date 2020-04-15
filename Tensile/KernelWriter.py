@@ -561,6 +561,8 @@ class KernelWriter(metaclass=abc.ABCMeta):
     if not kernel["PrefetchLocalRead"]:
       if self.enable["Wait"]:
         kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, -1, 0, -1, "4wait for local write"))
+        if kernel["DirectToLdsA"] or kernel["DirectToLdsB"]:
+          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, 0, -1, -1, "9wait for global read"))
       if self.enable["Sync"]:
         kl.append(self.syncThreads(kernel))
     for u in range(0, kernel["LoopIters"]):
@@ -765,8 +767,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
 
       if kernel["PrefetchGlobalRead"] and not kernel["PrefetchLocalRead"]:
         if self.enable["Wait"]:
-          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, 1, 0, -1, \
-              "1wait for local write"))
+          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, 1, 0, -1, "1wait for local write"))
+          if kernel["DirectToLdsA"] or kernel["DirectToLdsB"]:
+            kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, 0, -1, -1, "10wait for global read"))
 
       # if not prefetch global, localWrite before mac's
       if not kernel["PrefetchGlobalRead"]:
@@ -1076,8 +1079,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
       kl.append(self.comment("iter %u (last)"%unrollIter))
       if kernel["PrefetchGlobalRead"] and kernel["PrefetchLocalRead"]:
         if self.enable["Wait"]:
-          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, -1, 0, -1, \
-              "3wait for local write"))
+          kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, -1, 0, -1, "3wait for local write"))
+          if kernel["DirectToLdsA"] or kernel["DirectToLdsB"]:
+            kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, 0, -1, -1, "11wait for global read"))
         if self.enable["Sync"]:
           kl.append(self.syncThreads(kernel))
 

@@ -6802,14 +6802,17 @@ class KernelWriterAssembly(KernelWriter):
 
 
                 if kernel["DirectToLds%s"%tc]:
-                  if directToLdsLoads != 0:
+                  if directToLdsLoads == 0:
+                    kStr += inst("s_mov_b32", "m0", sgpr("LocalWriteAddr%s"%tc), "m0 <- LDS write address")
+                  else:
                     ldsInc = kernel["NumThreads"] * 4
                     if kernel["LdsBlockSizePerPad"] != 0:
                       ldsInc += (ldsInc // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
+                    else:
+                      ldsInc += (ldsInc // (kernel["NumThreads"] * 4)) * kernel["LdsPad%s"%tc] * tP["bpe"]
                     kStr += inst("s_add_u32", "m0", "m0", ldsInc, "Move LDS write address to next line" )
-                  directToLdsLoads+=1
 
-                  # Assembler expects a destination VGPR even though not written
+                  directToLdsLoads+=1
                   destVgpr=0
                 else:
                   destVgpr="G2L%s+%u+%u"%(tc, g2lIdx, regIdx)
@@ -6971,7 +6974,6 @@ class KernelWriterAssembly(KernelWriter):
     g2lIdx = 0
     loadWidth = tP["globalReadInstruction"].totalWidth # load width in elements?
     bpl = self.bpeAB * tP["glvw"] # bytes per load
-    ldsOffset = 0
 
     loopIdx = self.unrollIdx # TODO - does this handle multiple summation indices?
     if kernel["SuppressNoLoadLoop"]:
@@ -7017,11 +7019,6 @@ class KernelWriterAssembly(KernelWriter):
     if kernel["DirectToLds%s"%tP["tensorChar"]]:
       # DirectToLds only enabled for TLU=1 cases, where the registers are directly copied into LDS
       assert (kernel["LocalWriteUseSgpr%s"%tc])
-      if kernel["ExpandPointerSwap"]:
-        imod.header.addInst("s_add_u32", "m0", sgpr("LocalWriteAddr%s"%tc), \
-                      tP["localWriteSwapByteOffset"], "m0 <- LDS write address")
-      else:
-        imod.header.addInst("s_mov_b32", "m0", sgpr("LocalWriteAddr%s"%tc), "m0 <- LDS write address")
 
 
     if guardK:
@@ -7069,24 +7066,20 @@ class KernelWriterAssembly(KernelWriter):
                 loadModule.addCode(codeMod)
 
               if kernel["DirectToLds%s"%tc]:
-                # Get offset (for checking, see comment below) and comment:
-                (checkOffset, iDummy, comment) = \
-                    self.calculateLdsWriteOffset(perp, para, sPerp, sPara, kernel, tP, 0)
-
-                # Direct to LDS always writes consecutive LDS locations at m0 + 4 * TidInWave
-                # Therefore we double-check here to ensure the desired LDS write offset
-                # is moving at NumThreads*4.  This should already be guaranteed since
-                # we only use direct-to-lds for non-transpose cases but double-check here.
-                ldsInc = kernel["NumThreads"] * 4
-                if kernel["LdsBlockSizePerPad"] != 0:
-                  ldsInc += (ldsInc // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
-                #print ("checkOffset=", checkOffset, "ldsOffset=", ldsOffset, "ldsInc=", ldsInc)
-
-                if directToLdsLoads != 0:
+                if directToLdsLoads == 0:
+                  if kernel["ExpandPointerSwap"]:
+                    loadModule.addInst("s_add_u32", "m0", sgpr("LocalWriteAddr%s"%tc), tP["localWriteSwapByteOffset"], "m0 <- LDS write address")
+                  else:
+                    loadModule.addInst("s_mov_b32", "m0", sgpr("LocalWriteAddr%s"%tc), "m0 <- LDS write address")
+                else:
+                  ldsInc = kernel["NumThreads"] * 4
+                  if kernel["LdsBlockSizePerPad"] != 0:
+                    ldsInc += (ldsInc // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
+                  else:
+                    ldsInc += (ldsInc // (kernel["NumThreads"] * 4)) * kernel["LdsPad%s"%tc] * tP["bpe"]
                   loadModule.addInst("s_add_u32", "m0", "m0", ldsInc, "Move LDS write address to next line" )
 
                 directToLdsLoads+=1
-                ldsOffset += ldsInc
                 destVgpr=0
               else:
                 destVgpr="G2L%s+%u"%(tc, g2lIdx)
