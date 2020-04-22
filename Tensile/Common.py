@@ -362,6 +362,8 @@ validParameters = {
     # For an 8x8 TT with PrefetchGlobalRead=1 this can save 33 VGPRs.
     "DirectToLds":                [ False, True ],
 
+    "DirectToLdsInstOffset":      [ False, True ],
+
     # Load options:
     # (GRO = Global Read Offset)
     # BufferLoad=0:
@@ -822,6 +824,7 @@ defaultBenchmarkCommonParameters = [
     {"BufferLoad":                [ True ] },
     {"BufferStore":               [ True ] },
     {"DirectToLds":               [ False ] },
+    {"DirectToLdsInstOffset":     [ False ] },
     {"UseSgprForGRO":             [ -1 ] },
     {"AssertSummationElementMultiple": [ 1 ] },
     {"AssertFree0ElementMultiple": [ 1 ] },

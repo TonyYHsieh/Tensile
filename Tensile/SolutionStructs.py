@@ -2046,8 +2046,8 @@ class Solution:
       return False
 
     if (state["LdsBlockSizePerPad"] == 0) \
-        and (state["LdsPad%c" % tc] != 0) \
-        and ((state["LSC%c" % tc] * numBytes) != (state["NumThreads"] * 4)):
+        and (state["LdsPad%c" % tc] != 0):
+#        and ((state["LSC%c" % tc] * numBytes) != (state["NumThreads"] * 4)):
 #        and ((state["LSC%c" % tc] * numBytes) % (globalParameters["WavefrontWidth"] * 4) != 0):
       return False
 
