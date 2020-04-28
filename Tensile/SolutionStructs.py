@@ -1696,6 +1696,41 @@ class Solution:
     state["ThreadTile0"] = state["ThreadTile"][0]
     state["ThreadTile1"] = state["ThreadTile"][1]
 
+    if state["MatrixInstruction"]:
+      state["MIOutputVectorWidth"] = 4
+
+      numOfWave = (state["WorkGroup"][0] * state["WorkGroup"][1]) // globalParameters["WavefrontWidth"]
+
+      # block dimension
+      state['MatrixInstBM'] = state["MIWG0"] // state["MatrixInstM"]
+      state['MatrixInstBM'] = min(state['MatrixInstBM'], state["MatrixInstB"])
+      state['MatrixInstBN'] = state["MatrixInstB"] // state['MatrixInstBM']
+
+      # wave dimension
+      state['MIWaveGroup']    = [1, 1]
+      state['MIWaveGroup'][0] = min((state["MIWG0"] // state["MatrixInstM"]) // state['MatrixInstBM'], numOfWave)
+      state['MIWaveGroup'][1] = numOfWave // state['MIWaveGroup'][0]
+
+      # wave tile
+      state['MIWaveTile']    = [1, 1]
+      state['MIWaveTile'][0] = state["ThreadTile"][0]
+      state['MIWaveTile'][1] = state["ThreadTile"][1] // state['MatrixInstN']
+
+      state["UnrollMajorLDSA"] = state["TransposeLDS"]
+      state["UnrollMajorLDSB"] = state["TransposeLDS"]
+
+      if state["MatrixInstM"] == 4:
+        state["ThreadTile0"] = state["MIWaveTile"][0] * state["MIOutputVectorWidth"]
+        state["ThreadTile1"] = state["MIWaveTile"][1]
+        state["SubGroup0"]   = state["MIWaveGroup"][0] * state["MatrixInstM"] * state["MatrixInstBM"] // state["MIOutputVectorWidth"]
+        state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"] * state["MatrixInstBN"]
+      else:
+        state["ThreadTile0"] = state["MatrixInstBM"] * state["MIWaveTile"][0] * (state["MatrixInstM"] * state["MatrixInstN"] // globalParameters["WavefrontWidth"])
+        state["ThreadTile1"] = state["MatrixInstBN"] * state["MIWaveTile"][1]
+        state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
+        state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
+      state["LocalSplitU"] = 1
+
     # TODO MI - SubGroup0 temporarily == MIWG0, revisit later
     # macro tile sizes
     if "SubGroup0" in state and "ThreadTile0" in state:
@@ -2550,25 +2585,34 @@ class Solution:
     if state["TransposeLDS"] == 1:
       if state["LdsBlockSizePerPad"] == -1:
         state["LdsBlockSizePerPad"] = 256
+    elif state["TransposeLDS"] == 0 and state["LdsBlockSizePerPad"] != 0:
+      reject(state, "didn't support LdsBlockSizePerPad when TransposeLDS is disabled")
 
     if state["LocalReadVectorWidth"] != -1:
       if not state["TransposeLDS"] == 1:
         reject(state, "LocalReadVectorWidth requires TransposeLDS=1")
 
     ldsAlign = int(64 / state["ProblemType"]["DataType"].numRegisters())
-    if not state["LdsBlockSizePerPad"] == -1:
-        #calculate number of boundaries from MT*depthU
-      LdsPadCntA = (state["DepthU"]*state["MacroTile0"])//(state["LdsBlockSizePerPad"] // state["ProblemType"]["DataType"].numBytes())
-      LdsPadCntB = (state["DepthU"]*state["MacroTile1"])//(state["LdsBlockSizePerPad"] // state["ProblemType"]["DataType"].numBytes())
-      ldsNumElementsA = state["DepthU"]*state["MacroTile0"]+LdsPadCntA*state["LdsPadA"]
-      ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA,ldsAlign)
-      ldsNumElementsB = state["DepthU"]*state["MacroTile1"]+LdsPadCntB*state["LdsPadB"]
-      ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB,ldsAlign)
+
+    padInterval = state["LdsBlockSizePerPad"] // bpeAB
+    if state["UnrollMajorLDSA"]:
+      ldsNumElementsA = (state["DepthU"] + state["LdsPadA"]) * state["MacroTile0"]
+      if state["LdsBlockSizePerPad"] != 0:
+        ldsNumElementsA = int((state["DepthU"] * state["MacroTile0"]) / padInterval * (padInterval + state["LdsPadA"]))
+      ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA, ldsAlign)
     else:
-      ldsNumElementsA = state["DepthU"]*(state["MacroTile0"]+state["LdsPadA"])
-      ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA,ldsAlign)
-      ldsNumElementsB = state["DepthU"]*(state["MacroTile1"]+state["LdsPadB"])
-      ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB,ldsAlign)
+      ldsNumElementsA = state["DepthU"] * (state["MacroTile0"] + state["LdsPadA"])
+      ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA, ldsAlign)
+
+    if state["UnrollMajorLDSB"]:
+      ldsNumElementsB = (state["DepthU"] + state["LdsPadB"]) * state["MacroTile1"]
+      if state["LdsBlockSizePerPad"] != 0:
+        ldsNumElementsB = int((state["DepthU"] * state["MacroTile1"]) / padInterval * (padInterval + state["LdsPadB"]))
+      ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB, ldsAlign)
+    else:
+      ldsNumElementsB = state["DepthU"] * (state["MacroTile1"] + state["LdsPadB"])
+      ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB, ldsAlign)
+
     # todo, can the alignment be a power of 2?
     state["LdsOffsetA"] = 0
     if state["PrefetchGlobalRead"]:
