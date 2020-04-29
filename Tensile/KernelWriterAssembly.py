@@ -5941,7 +5941,8 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   def mfmaIter(self, kernel, m, innerUnroll, tail=False):
 
-    kStr = ""
+    imod = Code.Module("mi")
+    shiftK = Code.Module("shiftK")
 
     # calculate constant
     numRegisters     = kernel["ProblemType"]["DataType"].numRegisters()
@@ -5968,59 +5969,61 @@ class KernelWriterAssembly(KernelWriter):
 
     # handle multiple K element in MFMA instruction
     if tail and kernel["MatrixInstK"] > 1:
-      kStr += vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr)
-      kStr += vectorStaticDivide(kReg, kReg, dividerFortidInK, tmpVgpr, tmpSgpr)
-      kStr += staticMultiply(vgpr(kReg), vgpr(kReg), numMIInput, sgpr(tmpSgpr))
+      shiftK.addCode(vectorStaticRemainder(dummy, kReg, "Serial", globalParameters["WavefrontWidth"], tmpVgpr, tmpSgpr))
+      shiftK.addCode(vectorStaticDivide(kReg, kReg, dividerFortidInK, tmpVgpr, tmpSgpr))
+      shiftK.addCode(staticMultiply(vgpr(kReg), vgpr(kReg), numMIInput, sgpr(tmpSgpr)))
 
       # replace 0 for differnet thread
-      kStr += inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index >= Size L")
+      shiftK.addCode(inst("v_cmp_ge_i32", sgpr(tmpSgpr, 2), vgpr(kReg), sgpr(loopCounterName), "check K index >= Size L"))
       for bk in range(0, vgprPerInput):
         for a in range(0, kernel["MIWaveTile"][0]):
           for iui in range(0, innerUnroll):
             aStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a*vgprPerInput, bk), 1)
-            kStr += inst("v_cndmask_b32", aStr, aStr, hex(0), sgpr(tmpSgpr, 2), "set 0 if K_idx >= sizeL")
+            shiftK.addCode(inst("v_cndmask_b32", aStr, aStr, hex(0), sgpr(tmpSgpr, 2), "set 0 if K_idx >= sizeL"))
         for b in range(0, kernel["MIWaveTile"][1]):
           for iui in range(0, innerUnroll):
             bStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b*vgprPerInput, bk), 1)
-            kStr += inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "set 0 if K_idx >= sizeL")
+            shiftK.addCode(inst("v_cndmask_b32", bStr, bStr, hex(0), sgpr(tmpSgpr, 2), "set 0 if K_idx >= sizeL"))
 
       # replace 0 for same thread
       if numMIInput > 1:
-        kStr += inst("v_sub_u32",    vgpr(kReg), sgpr(loopCounterName), vgpr(kReg), "get distance between size and k index")
-        kStr += inst("v_cmp_lt_i32", sgpr(tmpSgpr,2), vgpr(kReg), numMIInput, "set partial 0 if distance less than input per thread")
-        kStr += inst("s_and_b32",    sgpr(tmpSgpr+2), sgpr(loopCounterName), numMIInput-1, "get inputs for edge thread")
-        kStr += inst("s_sub_u32",    sgpr(tmpSgpr+2), numMIInput, sgpr(tmpSgpr+2), "use shift to fill 0 for outside element")
-        kStr += inst("s_lshl_b32",   sgpr(tmpSgpr+2), sgpr(tmpSgpr+2), log2(shiftPerElement), "use shift to fill 0 for outside element")
+        shiftK.addCode(inst("v_sub_u32",    vgpr(kReg), sgpr(loopCounterName), vgpr(kReg), "get distance between size and k index"))
+        shiftK.addCode(inst("v_cmp_lt_i32", sgpr(tmpSgpr,2), vgpr(kReg), numMIInput, "set partial 0 if distance less than input per thread"))
+        shiftK.addCode(inst("s_and_b32",    sgpr(tmpSgpr+2), sgpr(loopCounterName), numMIInput-1, "get inputs for edge thread"))
+        shiftK.addCode(inst("s_sub_u32",    sgpr(tmpSgpr+2), numMIInput, sgpr(tmpSgpr+2), "use shift to fill 0 for outside element"))
+        shiftK.addCode(inst("s_lshl_b32",   sgpr(tmpSgpr+2), sgpr(tmpSgpr+2), log2(shiftPerElement), "use shift to fill 0 for outside element"))
         for a in range(0, kernel["MIWaveTile"][0]):
           for iui in range(0, innerUnroll):
             aStr  = vgpr("ValuA_X%u_I%u+%u" % (m, iui, a * vgprPerInput), vgprPerInput)
-            kStr += inst("v_lshlrev_b%u" % (vgprPerInput*32), vgpr(abReg, vgprPerInput), sgpr(tmpSgpr+2), aStr, "")
+            shiftK.addCode(inst("v_lshlrev_b%u" % (vgprPerInput*32), vgpr(abReg, vgprPerInput), sgpr(tmpSgpr+2), aStr, ""))
             for bk in range(0, vgprPerInput):
               aStr  = vgpr("ValuA_X%u_I%u+%u+%u" % (m, iui, a * vgprPerInput, bk), 1)
-              kStr += inst("v_cndmask_b32", aStr, aStr, vgpr(abReg+bk), sgpr(tmpSgpr, 2), "")
+              shiftK.addCode(inst("v_cndmask_b32", aStr, aStr, vgpr(abReg+bk), sgpr(tmpSgpr, 2), ""))
         for b in range(0, kernel["MIWaveTile"][1]):
           for iui in range(0, innerUnroll):
             bStr     = vgpr("ValuB_X%u_I%u+%u" % (m, iui, b*vgprPerInput), vgprPerInput)
-            kStr += inst("v_lshlrev_b%u" % (vgprPerInput*32), vgpr(abReg, vgprPerInput), sgpr(tmpSgpr+2), bStr, "")
+            shiftK.addCode(inst("v_lshlrev_b%u" % (vgprPerInput*32), vgpr(abReg, vgprPerInput), sgpr(tmpSgpr+2), bStr, ""))
             for bk in range(0, vgprPerInput):
               bStr  = vgpr("ValuB_X%u_I%u+%u+%u" % (m, iui, b*vgprPerInput, bk), 1)
-              kStr += inst("v_cndmask_b32", bStr, bStr, vgpr(abReg+bk), sgpr(tmpSgpr, 2), "")
+              shiftK.addCode(inst("v_cndmask_b32", bStr, bStr, vgpr(abReg+bk), sgpr(tmpSgpr, 2), ""))
 
       s_nop = 2
 
-    kStr += ("s_nop %u\n" % (s_nop - 1)) if s_nop else ""
+    if s_nop != 0:
+      imod.addCode(("s_nop %u\n" % (s_nop - 1)))
 
-    for b in range(0, kernel["MIWaveTile"][1]):
-      for a in range(0, kernel["MIWaveTile"][0]):
-        for iui in range(0, innerUnroll):
+    for iui in range(0, innerUnroll):
+      for b in range(0, kernel["MIWaveTile"][1]):
+        for a in range(0, kernel["MIWaveTile"][0]):
           accIdx   = b * kernel["MIWaveTile"][0] + a
           accStart = accIdx * accs_per_wave
           accEnd   = accStart + accs_per_wave - 1
           aStr     = vgpr("ValuA_X%u_I%u+%u" % (m, iui, a*vgprPerInput), vgprPerInput)
           bStr     = vgpr("ValuB_X%u_I%u+%u" % (m, iui, b*vgprPerInput), vgprPerInput)
-          kStr    += "v_mfma_f32_%ux%ux%u%s a[%u:%u], %s, %s, a[%u:%u]%s" \
+
+          imod.addCode("v_mfma_f32_%ux%ux%u%s a[%u:%u], %s, %s, a[%u:%u]%s" \
                      % (kernel["MatrixInstM"], kernel["MatrixInstN"], kernel["MatrixInstK"], kernel["ProblemType"]["DataType"].toNameAbbrev(),
-                        accStart, accEnd, aStr, bStr, accStart, accEnd, self.endLine)
+                        accStart, accEnd, aStr, bStr, accStart, accEnd, self.endLine))
 
     # release register
     self.vgprPool.checkIn(kReg)
@@ -6028,8 +6031,11 @@ class KernelWriterAssembly(KernelWriter):
     self.vgprPool.checkIn(tmpVgpr)
     self.vgprPool.checkIn(dummy)
 
-    return kStr
+    mfmaMod = Code.Module("mfmaCode")
+    mfmaMod.addCode(shiftK)
+    mfmaMod.addCode(imod)
 
+    return mfmaMod
 
   ##############################################################################
   # MAC Iteration
@@ -7582,7 +7588,7 @@ class KernelWriterAssembly(KernelWriter):
     self.localReadDoCnt += 1
 
     tc                = tP["tensorChar"]
-    imod              = Code.Module("LocalReadDo%s"%tc)
+    imod              = Code.Module("LocalReadDo%s_I%s"%(tc,iui))
     instruction       = tP["localReadInstruction"]
     numOffsets        = instruction.numOffsets
     blockWidth        = instruction.blockWidth
@@ -7644,7 +7650,8 @@ class KernelWriterAssembly(KernelWriter):
 
     self.localReadDoCnt += 1
 
-    imod = Code.Module("LocalReadDo%s" % tP["tensorChar"])
+    imod = Code.Module("LocalReadDo%s_I%s" % (tP["tensorChar"],iui))
+
     tc               = tP["tensorChar"]
     tIdx             = tP["tensorIdx"]
     instruction      = tP["localReadInstruction"]
@@ -8924,7 +8931,6 @@ class KernelWriterAssembly(KernelWriter):
     if edge:
       vectorwidth = kernel["StoreVectorWidth"] if kernel["_VectorStore"] else 1
       vectorwidth = min(vectorwidth, self.maxGwvw(kernel), kernel["AssertFree0ElementMultiple"])
-      assert(kernel["VectorWidth"] % vectorwidth == 0)
     else:
       vectorwidth = kernel["StoreVectorWidth"] if kernel["_VectorStore"] else 1
       vectorwidth = min(vectorwidth, self.maxGwvw(kernel))
@@ -9256,7 +9262,10 @@ class KernelWriterAssembly(KernelWriter):
           # use same address vgpr for all
           addr = self.sharedColVgprs
         elif self.optSharedColVgpr:
-          elementCol = (d0 * gwvw + vc0) / gwvw
+          if kernel["MatrixInstruction"]:
+            elementCol = (d0 * gwvw + vc0) / gwvw
+          else:
+            elementCol = (d0 * kernel["VectorWidth"] + vc0) / gwvw
           assert (modf(elementCol)[0] < 0.001)
           elementCol = trunc(elementCol)
           addr = self.sharedColVgprs+elementCol

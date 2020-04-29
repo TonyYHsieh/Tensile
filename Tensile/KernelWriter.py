@@ -102,7 +102,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
 
     lastLoadIter = 0
     if kernel["MatrixInstruction"] and kernel["ScheduleIterAlg"] == 3:
-      numMfmaPerIter = self.numMfmas * kernel["InnerUnroll"]
+      numMfmaPerIter = kernel["MIWaveTile"][0] * kernel["MIWaveTile"][1] * kernel["InnerUnroll"]
     else:
       numMfmaPerIter = 1
     if not self.scheduleGlobalRead:
@@ -364,7 +364,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       # interleave pack code
       packItem = packCode.flatitems()
       packCount = 0
-      packInstPerIter = (1 + self.numRowInsts * self.numColInsts)*(kernel["MatrixInstK"]//2)
+      packInstPerIter = (1 + kernel["MIWaveTile"][0] * kernel["MIWaveTile"][1]) * (kernel["MatrixInstK"] // 2)
       while packItem:
         if packCount < packInstPerIter:
           item = packItem.pop(0)
@@ -408,7 +408,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
     elif self.scheduleIterAlg == 3:
       # mfma interleave
       if kernel["MatrixInstruction"]:
-        numMfmaPerIter = self.numMfmas * kernel["InnerUnroll"]
+        numMfmaPerIter = kernel["MIWaveTile"][0] * kernel["MIWaveTile"][1] * kernel["InnerUnroll"]
         writesPerIter = localWriteCode.countType(Code.LocalWriteInst)
         localWriteEndIter = kernel["LoopIters"] - kernel["PrefetchLocalRead"] - 1
         isBarrier = localWriteEndIter + 1
@@ -448,9 +448,11 @@ class KernelWriter(metaclass=abc.ABCMeta):
               packAB.addCode(packA.items().pop(0))
             if packB.items():
               packAB.addCode(packB.items().pop(0))
+
         # remove s_nop for packing if TLDS
         if (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and not kernel["TransposeLDS"]:
           macIterItems.pop(0)
+
         iterCode.addCode(waitLWCode)
         iterCode.addCode(syncCode)
         skipLocalWriteWaitcnt = 0
