@@ -2928,7 +2928,6 @@ class Solution:
     requiredParameters["MacroTile1"] = False # always prepended
     requiredParameters["DepthU"] = False # always prepended
     requiredParameters["LdcEqualsLdd"] = False # always prepended
-    requiredParameters["MatrixInstruction"] = False # covered by parameters below
     requiredParameters["MatrixInstM"] = False # always prepended
     requiredParameters["MatrixInstN"] = False # always prepended
     requiredParameters["MatrixInstK"] = False # always prepended
@@ -2961,10 +2960,6 @@ class Solution:
       name += "%s%ux%ux%u_" \
           % ( Solution.getParameterNameAbbreviation("MacroTile"), \
           state["MacroTile0"], state["MacroTile1"], state["DepthU"] )
-    if "MatrixInstM" in state:
-      name += "%s%ux%ux%ux%u_" \
-          % ( Solution.getParameterNameAbbreviation("MatrixInstruction"), \
-          state["MatrixInstM"], state["MatrixInstN"], state["MatrixInstK"], state["MatrixInstB"] )
     if "LdcEqualsLdd" in state:
       if state["LdcEqualsLdd"]:
         name += "SE_"
