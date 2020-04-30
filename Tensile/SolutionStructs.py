@@ -1655,42 +1655,21 @@ class Solution:
 
     if state["MatrixInstruction"]:
       if state["MatrixInstruction"][0] != -1:
-        if len(state["MatrixInstruction"]) == 4:
+        if len(state["MatrixInstruction"]) == 6:
           # check for valid instruction with input type
-          itemsPerThread = state["MatrixInstruction"][0] * state["MatrixInstruction"][1] * state["MatrixInstruction"][3] // 64
-          if state["ThreadTile"][1] % itemsPerThread != 0:
-            reject(state, "ThreadTile must be a multiple of MatrixInstruction")
-          state["MatrixInstM"] = state["MatrixInstruction"][0]
-          state["MatrixInstN"] = state["MatrixInstruction"][1]
-          state["MatrixInstK"] = state["MatrixInstruction"][2]
-          state["MatrixInstB"] = state["MatrixInstruction"][3]
+          state["MatrixInstM"]  = state["MatrixInstruction"][0]
+          state["MatrixInstN"]  = state["MatrixInstruction"][1]
+          state["MatrixInstK"]  = state["MatrixInstruction"][2]
+          state["MatrixInstB"]  = state["MatrixInstruction"][3]
+          state['MatrixInstBM'] = state["MatrixInstruction"][4]
+          state['MatrixInstBN'] = state["MatrixInstruction"][5]
     else:
       if state["ThreadTile"][0] > 16 or state["ThreadTile"][1] > 16:
         reject(state, "Invalid value for ThreadTile")
 
     if state["MatrixInstruction"]:
-      # for original parameter convert.
-      miwg0 = state["MatrixInstM"] if state["WorkGroup"][0] < state["MatrixInstM"] else  state["WorkGroup"][0]
-
       ##### parameters for kernel generator #####
       state["MIOutputVectorWidth"] = 4
-
-      numOfWave = (state["WorkGroup"][0] * state["WorkGroup"][1]) // globalParameters["WavefrontWidth"]
-
-      # block dimension
-      state['MatrixInstBM']    = miwg0 // state["MatrixInstM"]
-      state['MatrixInstBM']    = min(state['MatrixInstBM'], state["MatrixInstB"])
-      state['MatrixInstBN']    = state["MatrixInstB"] // state['MatrixInstBM']
-
-      # wave dimension
-      state['MIWaveGroup']     = [1, 1]
-      state['MIWaveGroup'][0]  = min((miwg0 // state["MatrixInstM"]) // state['MatrixInstBM'], numOfWave)
-      state['MIWaveGroup'][1]  = numOfWave // state['MIWaveGroup'][0]
-
-      # wave tile
-      state['MIWaveTile']      = [1, 1]
-      state['MIWaveTile'][0]   = state["ThreadTile"][0]
-      state['MIWaveTile'][1]   = state["ThreadTile"][1] // state['MatrixInstN']
 
       state["UnrollMajorLDSA"] = state["TransposeLDS"]
       state["UnrollMajorLDSB"] = state["TransposeLDS"]
@@ -1716,7 +1695,7 @@ class Solution:
       state["ThreadTile0"] = state["ThreadTile"][0]
       state["ThreadTile1"] = state["ThreadTile"][1]
 
-    state["NumThreads"] = state["WorkGroup"][0] * state["WorkGroup"][1] * state["LocalSplitU"]
+    state["NumThreads"] = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
 
     # macro tile sizes
     if "SubGroup0" in state and "ThreadTile0" in state:
