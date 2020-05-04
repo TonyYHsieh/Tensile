@@ -2535,8 +2535,6 @@ class KernelWriterSource(KernelWriter):
     kStr += "  }%s" % self.endLine
     return kStr
 
-  def shiftVectorComponentsForMatrixInst(self, kernel, tP):
-    return self.shiftVectorComponents(kernel, tP)
 
   ##############################################################################
   # Shift Vectors Components d1
