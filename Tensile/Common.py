@@ -254,7 +254,7 @@ validMFMA["H"] = [[32,32, 8, 1, 1, 1], [32,32, 4, 2, 2, 1], [32,32, 4, 2, 1, 2],
 
 validMFMA["4xi8"] = [[32,32,4,2], [32,32,8,1], [16,16,4,4], [16,16,16,1], [4,4,4,16]]
 
-validMatrixInstructions = [[], [-1]] + validMFMA["H"] + validMFMA["S"] + validMFMA["B"] + validMFMA["4xi8"]
+validMIBlocks     = [[], [-1]] + validMFMA["H"] + validMFMA["S"] + validMFMA["B"] + validMFMA["4xi8"]
 validMIWaveGroups = [[], [-1], [1,1], [2,1], [1,2], [1,4], [2,2], [4, 1]]
 validMIWaveTiles  = [[], [-1], [1,1], [2,1], [1,2], [1,4], [2,2], [4, 1]]
 
@@ -610,10 +610,11 @@ validParameters = {
     "ThreadTile":                 validThreadTiles,
     "MacroTile":                  validMacroTiles,      # MT0 = wg0*tt0, MT1 = wg1*tt1
 
-    # MatrixInstruction: (M x N x K x B)
+    # MIBlock: (M x N x K x B)
     # XDLOPS tile definition, only valid for gfx908
     # If empty, do not use these instructions
-    "MatrixInstruction":          validMatrixInstructions,
+    "EnableMatrixInstruction":    [False, True],
+    "MIBlock":                    validMIBlocks,
     "MIWaveGroup":                validMIWaveGroups,
     "MIWaveTile":                 validMIWaveTiles,
 
@@ -900,7 +901,8 @@ defaultBenchmarkCommonParameters = [
     {"WorkGroupMappingType":      [ "B" ] },
     {"WorkGroupMapping":          [ 8 ] },
     {"ThreadTile":                [ [4,4] ] },
-    {"MatrixInstruction":         [ [32, 32, 1, 2, 1, 2] ] },
+    {"EnableMatrixInstruction":   [ False ] },
+    {"MIBlock":                   [ [32, 32, 1, 2, 1, 2] ] },
     {"MIWaveGroup":               [ [1, 1] ] },
     {"MIWaveTile":                [ [1, 1] ] },
     {"DisableAtomicFail":         [ 0 ] },

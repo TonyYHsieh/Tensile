@@ -1653,26 +1653,28 @@ class Solution:
     if "Valid" not in state:
       state["Valid"] = True
 
-    if state["MatrixInstruction"]:
-      if state["MatrixInstruction"][0] != -1:
-        if len(state["MatrixInstruction"]) == 6:
-          # check for valid instruction with input type
-          state["MatrixInstM"]  = state["MatrixInstruction"][0]
-          state["MatrixInstN"]  = state["MatrixInstruction"][1]
-          state["MatrixInstK"]  = state["MatrixInstruction"][2]
-          state["MatrixInstB"]  = state["MatrixInstruction"][3]
-          state['MatrixInstBM'] = state["MatrixInstruction"][4]
-          state['MatrixInstBN'] = state["MatrixInstruction"][5]
-    else:
-      if state["ThreadTile"][0] > 16 or state["ThreadTile"][1] > 16:
-        reject(state, "Invalid value for ThreadTile")
+    EnableMatrixInstruction = state["EnableMatrixInstruction"] if "EnableMatrixInstruction" in state else None
+    if EnableMatrixInstruction == None:
+      if  ("MIBlock" in state and len(state["MIBlock"]) == 6) \
+          and ("MIWaveGroup" in state and len(state["MIWaveGroup"]) == 2) \
+          and ("MIWaveTile" in state and len(state["MIWaveTile"]) == 2):
+        EnableMatrixInstruction = True
+      elif ("WorkGroup" in state and len(state["WorkGroup"]) == 3) \
+          and ("ThreadTile" in state and len(state["ThreadTile"]) == 2) :
+        EnableMatrixInstruction = False
+      else:
+        reject(state, "EnableMatrixInstruction undetermined")
 
-    if state["MatrixInstruction"]:
-      ##### parameters for kernel generator #####
+    if EnableMatrixInstruction == True:
+      state["MatrixInstM"]         = state["MIBlock"][0]
+      state["MatrixInstN"]         = state["MIBlock"][1]
+      state["MatrixInstK"]         = state["MIBlock"][2]
+      state["MatrixInstB"]         = state["MIBlock"][3]
+      state["MatrixInstBM"]        = state["MIBlock"][4]
+      state["MatrixInstBN"]        = state["MIBlock"][5]
+
+      state["LocalSplitU"]         = 1
       state["MIOutputVectorWidth"] = 4
-
-      state["UnrollMajorLDSA"] = state["TransposeLDS"]
-      state["UnrollMajorLDSB"] = state["TransposeLDS"]
 
       if state["MatrixInstM"] == 4:
         state["ThreadTile0"] = state["MIWaveTile"][0] * state["MIOutputVectorWidth"]
@@ -1685,24 +1687,25 @@ class Solution:
         state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
         state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
 
+      state["UnrollMajorLDSA"] = state["TransposeLDS"]
+      state["UnrollMajorLDSB"] = state["TransposeLDS"]
+
       state["WorkGroup"][0] = state["SubGroup0"]
       state["WorkGroup"][1] = state["SubGroup1"]
 
       state["ThreadTile"][0] = state["ThreadTile0"]
       state["ThreadTile"][1] = state["ThreadTile1"]
 
-      state["LocalSplitU"] = 1
-    else:
-      state["SubGroup0"] = state["WorkGroup"][0]
-      state["SubGroup1"] = state["WorkGroup"][1]
-
-      state["LocalSplitU"] = state["WorkGroup"][2]
-      state["NumThreads"] = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
-
+    elif EnableMatrixInstruction == False:
       state["ThreadTile0"] = state["ThreadTile"][0]
       state["ThreadTile1"] = state["ThreadTile"][1]
 
-    state["NumThreads"] = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
+      state["SubGroup0"]   = state["WorkGroup"][0]
+      state["SubGroup1"]   = state["WorkGroup"][1]
+      state["LocalSplitU"] = state["WorkGroup"][2]
+
+    if "SubGroup0" in state and "SubGroup1" in state and "LocalSplitU" in state:
+      state["NumThreads"]  = state["SubGroup0"] * state["SubGroup1"] * state["LocalSplitU"]
 
     # macro tile sizes
     if "SubGroup0" in state and "ThreadTile0" in state:
@@ -1772,8 +1775,6 @@ class Solution:
     # NumLoads is NOT used on the fractional path
     # NumLoads is number of vector loads per-thread
     state["NumLoads%s"%tc] = totalVectors * pv // state["NumThreads"]
-    #if state["MatrixInstruction"] and not state["PrefetchGlobalRead"]:
-    #  state["NumLoads%s"%tc] = totalVectors * pv // (state["NumThreads"] // 4)  # 4 simds/cu
     #print "result: ", pvar(state, "GlobalLoadVectorWidth%s"%tc), \
     #        pvar(state, "NumLoads%s"%tc)
 
@@ -2063,15 +2064,37 @@ class Solution:
     if "LoopUnroll" in state:
       state["LoopIters"] = state["LoopUnroll"]
 
-    if state["MatrixInstruction"]:
-      if not (state["ProblemType"]["DataType"].toChar() in validMFMA and \
-        state["MatrixInstruction"] in validMFMA[state["ProblemType"]["DataType"].toChar()]):
-        reject(state, "MatrixInstruction %s not valid for DataType %s" % (state["MatrixInstruction"], state["ProblemType"]["DataType"]))
-      if not state["ProblemType"]["HighPrecisionAccumulate"] and \
-         not state["ProblemType"]["DataType"].isSingle() :
+    if state["EnableMatrixInstruction"]:
+      if not (state["ProblemType"]["DataType"].toChar() in validMFMA \
+              and state["MIBlock"] in validMFMA[state["ProblemType"]["DataType"].toChar()]):
+        reject(state, "MIBlock %s not valid for DataType %s" % (state["MIBlock"], state["ProblemType"]["DataType"]))
+      if not (state["ProblemType"]["DataType"].isSingle() \
+              or state["ProblemType"]["DataType"].isBFloat16() \
+              or state["ProblemType"]["DataType"].isHalf()):
+        reject(state, "didn't support Matrix Instruction with type %s" % str(state["ProblemType"]["DataType"]))
+      if not state["MIBlock"] or len(state["MIBlock"]) != 6:
+        reject(state, "invalid MIBlock")
+      if not state["MIWaveGroup"] or len(state["MIWaveGroup"]) != 2:
+        reject(state, "invalid MIWaveGroup")
+      if not state["MIWaveTile"] or len(state["MIWaveTile"]) != 2:
+        reject(state, "invalid MIWaveTile")
+      if not state["ProblemType"]["HighPrecisionAccumulate"] \
+         and not state["ProblemType"]["DataType"].isSingle() :
         reject(state, "Matrix instructions for half types are natively accumulated" + \
          " in fp32 precision. Please add the following config:" + \
          "\n - HighPrecisionAccumulate: True")
+      if (state["LdsBlockSizePerPad"] != 0):
+        if (not state["UnrollMajorLDSA"]) or (not state["UnrollMajorLDSB"]):
+          reject(state, "didn't support LdsBlockSizePerPad on tile major LDS yet")
+        if state["LdsBlockSizePerPad"] < state["DepthU"]:
+          reject(state, "reject: DepthU %u > LdsBlockSizePerPad %u" % (state["DepthU"], state["LdsBlockSizePerPad"]))
+    else:
+      if state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]:
+        reject(state, "didn't support UnrollMajorLDS in VALU mode yet")
+      if (state["LdsBlockSizePerPad"] != 0):
+        reject(state, "didn't support LdsBlockSizePerPad in VALU mode yet")
+      if state["ThreadTile0"] > 16 or state["ThreadTile1"] > 16:
+        reject(state, "Invalid value for ThreadTile")
 
     if state["ProblemType"]["Tensor0"]==0:
       state["ThreadTileA"] = state["ThreadTile0"]
@@ -2200,7 +2223,7 @@ class Solution:
           or state["ThreadTile1"] % state["VectorWidth"] != 0:
         state["VectorWidth"] //= 2
     # TT0,1 both must be multiples of VW, b/c of rC, rA, rB
-    if not state["MatrixInstruction"]:
+    if not state["EnableMatrixInstruction"]:
       if state["ThreadTile0"] % state["VectorWidth"] != 0 \
           or state["ThreadTile1"] % state["VectorWidth"] != 0:
         reject(state, "ThreadTile0 %u or ThreadTile1 %u not a multiple of VectorWidth %u" \
@@ -2540,11 +2563,10 @@ class Solution:
       state["LdsPadB"] = 0 if state["ProblemType"]["TLUB"] else state["VectorWidth"]
       assert(state["LdsPadB"] >= 0)
 
-    if state["TransposeLDS"] == 1:
-      if not state["MatrixInstruction"]:
-        reject(state, "TransposeLds Supports only in MatrixInstruction=1")
+    if state["TransposeLDS"] == 1 and (not state["EnableMatrixInstruction"]):
+        reject(state, "TransposeLds Supports only in EnableMatrixInstruction=1")
 
-    if "MatrixInstruction" in state:
+    if state["EnableMatrixInstruction"]:
       if state["TransposeLDS"] == 1:
         if state["ProblemType"]["TLUA"] and  state["ProblemType"]["TLUB"]:
           reject(state, "TransposeLds requires TLUA=0 or TLUB=0")
@@ -2685,7 +2707,7 @@ class Solution:
       if elementMultipleOk \
         and state["NumThreads"] % globalParameters["WavefrontWidth"] == 0:
 
-        if state["MatrixInstruction"]:
+        if state["EnableMatrixInstruction"]:
           # use with transposeLDS
           if (state["GlobalLoadVectorWidthA"] * numBytes == 4) \
             and (( not state["ProblemType"]["TransposeA"]  \
@@ -2930,17 +2952,21 @@ class Solution:
           requiredParameters[key] = True
         else:
           requiredParameters[key] = False
-    requiredParameters["ProblemType"] = False # always prepended
-    requiredParameters["MacroTile0"] = False # always prepended
-    requiredParameters["MacroTile1"] = False # always prepended
-    requiredParameters["DepthU"] = False # always prepended
+
+    requiredParameters["ProblemType"]  = False # always prepended
+    requiredParameters["MacroTile0"]   = False # always prepended
+    requiredParameters["MacroTile1"]   = False # always prepended
+    requiredParameters["DepthU"]       = False # always prepended
     requiredParameters["LdcEqualsLdd"] = False # always prepended
-    requiredParameters["MatrixInstM"] = False # always prepended
-    requiredParameters["MatrixInstN"] = False # always prepended
-    requiredParameters["MatrixInstK"] = False # always prepended
-    requiredParameters["MatrixInstB"] = False # always prepended
-    requiredParameters["Kernel"] = True # distinguish kernels from solutions
-                                        # for single-source compilation
+    requiredParameters["MatrixInstM"]  = False # always prepended
+    requiredParameters["MatrixInstN"]  = False # always prepended
+    requiredParameters["MatrixInstK"]  = False # always prepended
+    requiredParameters["MatrixInstB"]  = False # always prepended
+    requiredParameters["MatrixInstBM"] = False # always prepended
+    requiredParameters["MatrixInstBN"] = False # always prepended
+
+    requiredParameters["Kernel"]       = True  # distinguish kernels from solutions
+                                               # for single-source compilation
     return requiredParameters
 
   ########################################

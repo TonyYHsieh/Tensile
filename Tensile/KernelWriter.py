@@ -101,7 +101,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
     globalReadIncBCode  = self.globalReadIncrements.findNamedItem("globalReadIncrementB")
 
     lastLoadIter = 0
-    if kernel["MatrixInstruction"] and kernel["ScheduleIterAlg"] == 3:
+    if kernel["EnableMatrixInstruction"] and kernel["ScheduleIterAlg"] == 3:
       numMfmaPerIter = kernel["MIWaveTile"][0] * kernel["MIWaveTile"][1] * kernel["InnerUnroll"]
     else:
       numMfmaPerIter = 1
@@ -200,7 +200,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       startIter = kernel["LoopIters"] - writesToSched
       # to offset last LW 1 mfma with barrier
       # TODO: how many mfma to offset based on mfma latency
-      if kernel["MatrixInstruction"]:
+      if kernel["EnableMatrixInstruction"]:
         writesToSched += 1
       startIter = localWriteEndIter - roundUp(writesToSched/numMfmaPerIter) + 1
       # - can't move a write past the load it depends on
@@ -238,7 +238,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
           # if localwrite is not multiple of numMfmaPerIter, fill last iteration first.
           # make sure numMfmaPerIter is enough to schedule localwrite
           # TODO: if numMfmaPerIter is not enough to schedule localwrite, need smarter way to distribute localWrite
-          if kernel["MatrixInstruction"] and \
+          if kernel["EnableMatrixInstruction"] and \
             u == startIter and \
             not (startIter + writesToSched//numMfmaPerIter > localWriteEndIter) and \
             kernel["ScheduleIterAlg"] == 3:
@@ -381,7 +381,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       iterCode.addInst("s_setprio ","3","Raise priority while processing macs")
       macIterItem = macIterCode.flatitems()
       # pop the first code which is s_nop 1 for packing
-      if kernel["MatrixInstruction"] and not kernel["TransposeLDS"] and \
+      if kernel["EnableMatrixInstruction"] and not kernel["TransposeLDS"] and \
       (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()):
         item = macIterItem.pop(0)
         iterCode.addCode(item)
@@ -407,7 +407,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       pass
     elif self.scheduleIterAlg == 3:
       # mfma interleave
-      if kernel["MatrixInstruction"]:
+      if kernel["EnableMatrixInstruction"]:
         numMfmaPerIter = kernel["MIWaveTile"][0] * kernel["MIWaveTile"][1] * kernel["InnerUnroll"]
         writesPerIter = localWriteCode.countType(Code.LocalWriteInst)
         localWriteEndIter = kernel["LoopIters"] - kernel["PrefetchLocalRead"] - 1
@@ -527,7 +527,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
     if isinstance(waitCode, Code.WaitCnt):
       # Set the waitCount, based on the new iter schedule
       lgkmcnt = 0 # most conservative
-      if kernel["MatrixInstruction"]:
+      if kernel["EnableMatrixInstruction"]:
         localReads  = localReadCode.countType(Code.LocalReadInst)
         localWrites = 0
         if kernel["ScheduleIterAlg"] == 0 or kernel["ScheduleIterAlg"] == 1:
@@ -802,7 +802,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       for iui in range(0,kernel["InnerUnroll"]):
         if self.enable["LocalRead"]:
           if u < kernel["LoopIters"] - kernel["PrefetchLocalRead"]:
-            if kernel["MatrixInstruction"] and \
+            if kernel["EnableMatrixInstruction"] and \
               (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
               not kernel["TransposeLDS"] :
               # Reading 16-bit data from LDS requires packing when ECC enabled
@@ -829,7 +829,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
             "7wait for local read"))
       if self.enable["MAC"]:
         luIdx = (u) % (kernel["PrefetchLocalRead"] + 1)
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           kl.append(pack[luIdx])
           for item in list(pack[luIdx].items()):
             self.vgprPool.checkIn(item.tempVgpr)
@@ -958,7 +958,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
             pack[plrIdx] = Code.Module()
             for espi in range(0, (self.prefetchAcrossPersistent and kernel["ExpandPointerSwap"])+1):
               for iui in range(0,kernel["InnerUnroll"]):
-                if kernel["MatrixInstruction"] and \
+                if kernel["EnableMatrixInstruction"] and \
                   (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
                   not kernel["TransposeLDS"]:
                   # Reading 16-bit data from LDS requires packing when ECC enabled
@@ -1067,7 +1067,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
           for plrIdx in range(0, kernel["PrefetchLocalRead"]):
             pack[plrIdx] = Code.Module()
             for iui in range(0,kernel["InnerUnroll"]):
-              if kernel["MatrixInstruction"] and \
+              if kernel["EnableMatrixInstruction"] and \
                 (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
                 not kernel["TransposeLDS"] :
                 # Reading 16-bit data from LDS requires packing when ECC enabled
@@ -1116,7 +1116,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
         if (u < kernel["LoopIters"] - kernel["PrefetchLocalRead"]) or kernel["PrefetchGlobalRead"]:
           for iui in range(0,kernel["InnerUnroll"]):
             if self.enable["LocalRead"]:
-              if kernel["MatrixInstruction"] and \
+              if kernel["EnableMatrixInstruction"] and \
                 (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
                 not kernel["TransposeLDS"] :
                 # Reading 16-bit data from LDS requires packing when ECC enabled
@@ -1208,7 +1208,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
 
         if self.enable["MAC"]:
           luIdx = (u) % (kernel["PrefetchLocalRead"]+1) # local to use for MACs
-          if kernel["MatrixInstruction"]:
+          if kernel["EnableMatrixInstruction"]:
             macIterCode.addCode(self.mfmaIter(kernel, luIdx, kernel["InnerUnroll"]))
           else:
             macIterCode.addCode(self.macIter(kernel, luIdx, kernel["InnerUnroll"], True ))
@@ -1393,7 +1393,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
         pack[plrIdx] = Code.Module()
         for iui in range(0,kernel["InnerUnroll"]):
           if self.enable["LocalRead"]:
-            if kernel["MatrixInstruction"] and \
+            if kernel["EnableMatrixInstruction"] and \
               (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
               not kernel["TransposeLDS"] :
               # Reading 16-bit data from LDS requires packing when ECC enabled
@@ -1469,7 +1469,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       # which waited for this ds_read
       if self.enable["MAC"]:
         luIdx = (unrollIter) % (kernel["PrefetchLocalRead"] + 1)
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           macIterCode.addCode(self.mfmaIter(kernel, luIdx, kernel["InnerUnroll"]))
         else:
           macIterCode.addCode(self.macIter(kernel, luIdx, kernel["InnerUnroll"], True))
@@ -1587,14 +1587,14 @@ class KernelWriter(metaclass=abc.ABCMeta):
 
       # Try to use InnerUnroll in the tail loop if allowed:
       KinInnerUnroll = kernel["InnerUnroll"]
-      if kernel["MatrixInstruction"]:
+      if kernel["EnableMatrixInstruction"]:
         KinInnerUnroll *= kernel["MatrixInstK"]
       tailLoopInnerUnroll = kernel["InnerUnroll"] if (kernel["AssertSummationElementMultiple"] % KinInnerUnroll == 0) else 1
 
       pack[0] = Code.Module()
       for iui in range(0,tailLoopInnerUnroll):
         if self.enable["LocalRead"]:
-          if kernel["MatrixInstruction"] and \
+          if kernel["EnableMatrixInstruction"] and \
             (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
             not kernel["TransposeLDS"] :
             # Reading 16-bit data from LDS requires packing when ECC enabled
@@ -1618,7 +1618,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
       if self.enable["Wait"]:
         kl.append(self.wait(kernel, tensorParametersA, tensorParametersB, -1, -1, 0, "4wait for local read"))
       if self.enable["MAC"]:
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           kl.append(pack[0])
           for item in list(pack[0].items()):
             self.vgprPool.checkIn(item.tempVgpr)
@@ -1653,7 +1653,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
           kl.append(self.shiftVectorComponents(kernel, tensorParametersA))
 
         # shift vector components d1
-        if not kernel["GuaranteeNoPartialB"] and self.readTileDimVectorB and not kernel["MatrixInstruction"]:
+        if not kernel["GuaranteeNoPartialB"] and self.readTileDimVectorB and not kernel["EnableMatrixInstruction"]:
           kl.append(self.comment("shift vector components d1"))
           kl.append(self.shiftVectorComponents(kernel, tensorParametersB))
 

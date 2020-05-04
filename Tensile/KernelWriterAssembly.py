@@ -913,7 +913,7 @@ class KernelWriterAssembly(KernelWriter):
       print("warning: ISA:", self.version, " is not supported; overriding with ", defaultIsa)
       self.version = defaultIsa
     
-    if kernel["MatrixInstruction"] and not self.version == (9,0,8):
+    if kernel["EnableMatrixInstruction"] and not self.version == (9,0,8):
       printExit("MatrixInstruction not supported for {0}".format(self.version))
 
     self.AsmBugs = {}
@@ -1204,7 +1204,7 @@ class KernelWriterAssembly(KernelWriter):
     ########################################
     # localRead A
     localReadWidth = (kernel["VectorWidth"] * tPA["bpe"]) // self.bpr
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       localReadWidth = tPA["bpe"] / self.bpr
     if kernel["UnrollMajorLDSA"]:
       localReadWidth *= kernel["ProblemType"]["DataType"].numMIInput()
@@ -1228,7 +1228,7 @@ class KernelWriterAssembly(KernelWriter):
     ########################################
     # localRead B
     localReadWidth = (kernel["VectorWidth"] * tPB["bpe"]) // self.bpr
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       localReadWidth = tPB["bpe"] / self.bpr
     if kernel["UnrollMajorLDSB"]:
       localReadWidth *= kernel["ProblemType"]["DataType"].numMIInput()
@@ -1272,7 +1272,7 @@ class KernelWriterAssembly(KernelWriter):
     self.numVgprValuC = (kernel["ThreadTile0"]*kernel["ThreadTile1"]*self.bpeCinternal)//self.bpr
 
     valuBlocks = (1+kernel["PrefetchLocalRead"]) * kernel["InnerUnroll"]
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       self.numVgprValuAPerBlock = kernel["MIWaveTile"][0] * kernel["ProblemType"]["DataType"].numMIInput() * tPA["bpe"] // self.bpr
       self.numVgprValuBPerBlock = kernel["MIWaveTile"][1] * kernel["ProblemType"]["DataType"].numMIInput() * tPA["bpe"] // self.bpr
     else:
@@ -1622,7 +1622,7 @@ class KernelWriterAssembly(KernelWriter):
         # numRemainderSumElements is required by multi-k matrix product in the multiply-accumulate loop. 
         # It means in the final iteration of each tail loop, the last N elem along summation dimension 
         # should be filled with 0's (numRemainderSumElements = numIterK % MatrixInstK)
-        if kernel["MatrixInstruction"] and \
+        if kernel["EnableMatrixInstruction"] and \
           kernel["AssertSummationElementMultiple"] % kernel["MatrixInstK"] != 0:
           self.defineSgpr("NumRemainderSumElements%s" % self.loopChar(kernel, i), 1)
 
@@ -3276,7 +3276,7 @@ class KernelWriterAssembly(KernelWriter):
     kStr += inst("_v_sub_co_u32",     "v[\\vRemainder]", "vcc",            "v[\\vDividend]", "v[\\vRemainder]", "final result" )
     kStr += ".endm%s" % self.endLine
 
-    if not kernel["MatrixInstruction"]:
+    if not kernel["EnableMatrixInstruction"]:
       kStr += self.defineMACMacro(kernel, kernel["InnerUnroll"], True)
       if kernel["InnerUnroll"] > 1:
         kStr += self.defineMACMacro(kernel, 1, True) # define OneIter case
@@ -4942,7 +4942,7 @@ class KernelWriterAssembly(KernelWriter):
         % (self.commentPrefix, tP["tileChar"], tP["tileChar"], \
         self.commentSuffix, self.endLine)
 
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       kStr += self.lraTileAssignmentMFMAA(kernel, tP)
     else:
       kStr += self.lraTileAssignmentVALUA(kernel, tP)
@@ -5053,7 +5053,7 @@ class KernelWriterAssembly(KernelWriter):
         % (self.commentPrefix, tP["tileChar"], tP["tileChar"], \
         tP["tileChar"], self.commentSuffix, self.endLine)
 
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       kStr += self.lraTileAssignmentMFMAB(kernel, tP)
     else:
       kStr += self.lraTileAssignmentVALUB(kernel, tP)
@@ -5165,7 +5165,7 @@ class KernelWriterAssembly(KernelWriter):
   def lraFinalOffset(self, kernel, tP):
     kStr = ""
 
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       kStr += self.lraFinalOffsetMFMA(kernel, tP)
     else:
       kStr += self.lraFinalOffsetVALU(kernel, tP)
@@ -5225,7 +5225,7 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   def initC(self, kernel):
     kStr = ""
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       pass # we can delay initializing them until before the writeback, where
            # alpha/beta operations and packing are about to be performed
     else:
@@ -5480,12 +5480,12 @@ class KernelWriterAssembly(KernelWriter):
       tmpSgpr = self.getTmpSgpr(4)
       if self.prefetchAcrossPersistent0:
         loopCounterName = "TailLoopCounter"
-        if kernel["MatrixInstruction"] and \
+        if kernel["EnableMatrixInstruction"] and \
            kernel["AssertSummationElementMultiple"] % kernel["MatrixInstK"] != 0:
           numRemainderSumElements = "NumRemainderSumElements"
       else:
         loopCounterName = self.loopCounterName(kernel, loopIdx)
-        if kernel["MatrixInstruction"] and \
+        if kernel["EnableMatrixInstruction"] and \
            kernel["AssertSummationElementMultiple"] % kernel["MatrixInstK"] != 0:
           numRemainderSumElements = "NumRemainderSumElements%s"%loopChar
       kStr += "\n"
@@ -5763,7 +5763,7 @@ class KernelWriterAssembly(KernelWriter):
 
       unrollInc      = 1
       KinInnerUnroll = kernel["InnerUnroll"]
-      if kernel["MatrixInstruction"]:
+      if kernel["EnableMatrixInstruction"]:
         unrollInc      *= kernel["MatrixInstK"]
         KinInnerUnroll *= kernel["MatrixInstK"]
       if kernel["AssertSummationElementMultiple"] % KinInnerUnroll == 0:
@@ -6273,7 +6273,7 @@ class KernelWriterAssembly(KernelWriter):
         self.getNamedLabel("Summation_End")
 
         # add copyback if required
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           instCycles = kernel["MatrixInstM"] // 2 # 32x32 is 64 cycles, 16x16 is 32 cycles, 4x4 is 8 cycles
           kStr += "s_nop %u\n" % instCycles
           ##for i in range(0, self.totalAgprs):
@@ -6301,7 +6301,7 @@ class KernelWriterAssembly(KernelWriter):
         assert(len(kernel["PackedC1IndicesX"]) == 1)
 
         ss.setupStoreElementsForBatch(kernel, fullVw, elements, None, isOptNLL=True)
-        if not kernel["MatrixInstruction"]:
+        if not kernel["EnableMatrixInstruction"]:
           kStr += inst("_v_add_lshl_u32", \
               vgpr(ss.sharedColVgprs), \
               vgpr(self.cinRowPtr), \
@@ -7544,7 +7544,7 @@ class KernelWriterAssembly(KernelWriter):
 
     if self.inTailLoop:
       inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + LdsPad) * tP["bpe"]
-      if kernel["MatrixInstruction"]:
+      if kernel["EnableMatrixInstruction"]:
         if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
           inc = kernel["LocalSplitU"] * tP["bpe"]
         inc *= kernel["MatrixInstK"]
@@ -7558,7 +7558,7 @@ class KernelWriterAssembly(KernelWriter):
           "lr%s += %u (LSU*(MT+PAD)*bpe)"%(tP["tensorChar"], inc) )
     else:
       if tP["localReadInstruction"].numOffsets == 1:
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
             tP["localReadOffset"] += kernel["LocalSplitU"] * kernel["MatrixInstK"]
           else:
@@ -7746,7 +7746,7 @@ class KernelWriterAssembly(KernelWriter):
     if not self.do["LocalRead%s" % tP["tensorChar"]]:
       return ""
 
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       return self.localReadDoMFMA(kernel, bufferIdx, iui, epsi, tP)
     else:
       return self.localReadDoVALU(kernel, bufferIdx, iui, epsi, tP)
@@ -8197,7 +8197,7 @@ class KernelWriterAssembly(KernelWriter):
   # Shift Vector Components d0,1
   ##############################################################################
   def shiftVectorComponents(self, kernel, tP):
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       return self.shiftVectorComponentsMFMA(kernel, tP)
     else:
       return self.shiftVectorComponentsVALU(kernel, tP)
@@ -8748,7 +8748,7 @@ class KernelWriterAssembly(KernelWriter):
     kStr = ""
     kStr += self.comment1("computeStoreVgprs")
 
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
       kStr += self.computeStoreVgprsMFMA(kernel, divisor, tid0Scale, tid1Scale)
     else:
       kStr += self.computeStoreVgprsVALU(kernel, divisor, tid0Scale, tid1Scale)
@@ -8961,7 +8961,7 @@ class KernelWriterAssembly(KernelWriter):
   # (ie non-edge cases)
   ##############################################################################
   def notLocalFullTileElements(self, kernel, edge):
-    if kernel["MatrixInstruction"]:
+    if kernel["EnableMatrixInstruction"]:
         return self.notLocalFullTileElementsMFMA(kernel, edge)
     else:
         return self.notLocalFullTileElementsVALU(kernel, edge)
@@ -9217,7 +9217,7 @@ class KernelWriterAssembly(KernelWriter):
         (d1,d0,vc1,vc0) = element
 
         coordOffset1 = 0
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           if kernel["MatrixInstM"] == 4:
             coordOffset1 = d1 * kernel["MatrixInstN"] *  kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1] + vc1
           else:
@@ -9238,7 +9238,7 @@ class KernelWriterAssembly(KernelWriter):
 
         # gpr and offset assignments for element
         coordOffset0 = 0
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           if kernel["MatrixInstM"] == 4:
             coordOffset0 = d0 * kernel["MatrixInstM"] *  kernel["MatrixInstBM"] * kernel["MIWaveGroup"][0] + vc0
           else:
@@ -9262,7 +9262,7 @@ class KernelWriterAssembly(KernelWriter):
           # use same address vgpr for all
           addr = self.sharedColVgprs
         elif self.optSharedColVgpr:
-          if kernel["MatrixInstruction"]:
+          if kernel["EnableMatrixInstruction"]:
             elementCol = (d0 * gwvw + vc0) / gwvw
           else:
             elementCol = (d0 * kernel["VectorWidth"] + vc0) / gwvw
@@ -9316,7 +9316,7 @@ class KernelWriterAssembly(KernelWriter):
           elementsLoadedPerbestVw = kernel["NumThreads"]*kernel["StoreVectorWidth"]
           if elementsLoadedPerVw < elementsLoadedPerbestVw:
             bestVw = kernel["StoreVectorWidth"]
-          if kernel["MatrixInstruction"]:
+          if kernel["EnableMatrixInstruction"]:
             if kernel["MatrixInstM"] == 4:
               sumIdx    = kw.startVgprValuC + vc0 + (d0 * kernel["MIOutputVectorWidth"]) + d1 * (kernel["MIOutputVectorWidth"] * kernel["MIWaveTile"][0])
             else:
@@ -9613,7 +9613,7 @@ class KernelWriterAssembly(KernelWriter):
       #   For MFMA shift pointer, correct data is stored in another thread.
       #   Therefore, MFMA cannot use v_mov to amend store data
       #   It needs to modify the coord1 of thread directly.
-      if not kernel["GuaranteeNoPartialB"] and kw.readTileDimVectorB and kernel["MatrixInstruction"] and edge:
+      if not kernel["GuaranteeNoPartialB"] and kw.readTileDimVectorB and kernel["EnableMatrixInstruction"] and edge:
         (d1,d0,vc1,vc0) = self.element
         if (d1 == vc1 == d0 == vc0 == 0) or self.newCoord1:
           packedC1 = kernel["PackedC1IndicesX"]
@@ -10040,7 +10040,7 @@ class KernelWriterAssembly(KernelWriter):
           # only do an even number of halves - since these share hi/lo pieces of some registers?
           if numElementsPerBatch > 1:
             numElementsPerBatch = int(numElementsPerBatch/2)*2
-          elif not kernel["MatrixInstruction"]:
+          elif not kernel["EnableMatrixInstruction"]:
             # The globalWriteBatch routine below can't handle odd elements per batch
             # and 0 elements per batch is illegal.
             # so if we don't have *GPR resources to handle a larger batch then need
@@ -10229,12 +10229,6 @@ class KernelWriterAssembly(KernelWriter):
       else:
         addr0 = vgpr(addrCalc.addrVgpr,2)
         addr1 = ""
-
-      #if kernel["MatrixInstruction"] and not edge:
-      # addr0 = vgpr(self.mfma_addr0)
-        #if (sumIdx // 32) % 2 == 0: # BBlocks
-      #  if (sumIdx // 32) % 2 == 0: # ABlocks
-      #    addr0 = vgpr(self.mfma_addr0)
 
       useBuffer = kernel["BufferStore"]
       if ss.optSrdIncForRow and addrCalc.rowInc:
@@ -11109,7 +11103,7 @@ class KernelWriterAssembly(KernelWriter):
         lgkmcnt += skipLocalWrite * (numA + numB)
       if skipLocalRead > -1:
         lrvw = kernel["VectorWidth"]
-        if kernel["MatrixInstruction"]:
+        if kernel["EnableMatrixInstruction"]:
           #FIXME  lrvw = 1 for all precision cases 
           # check fp16  requries 2 src(S) might use lrvw=2
           # Also explore using VW>1 for cases ThreadTile0>1 && ThreadTile1
