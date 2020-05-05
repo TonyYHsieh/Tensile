@@ -5964,7 +5964,7 @@ class KernelWriterAssembly(KernelWriter):
     # alloc sgpr
     tmpSgpr = self.getTmpSgpr(3)
 
-    if (numRegisters == 0.5) and ((kernel["UnrollMajorLDSA"] == False) or (kernel["UnrollMajorLDSA"] == False)):
+    if (numRegisters == 0.5) and ((kernel["UnrollMajorLDSA"] == False) or (kernel["UnrollMajorLDSB"] == False)):
       s_nop = 2
 
     # handle multiple K element in MFMA instruction
@@ -6010,7 +6010,9 @@ class KernelWriterAssembly(KernelWriter):
       s_nop = 2
 
     if s_nop != 0:
-      imod.addCode(("s_nop %u\n" % (s_nop - 1)))
+      imod.addCode("s_nop %u\n" % (s_nop - 1))
+    else:
+      imod.addCode("")
 
     for iui in range(0, innerUnroll):
       for b in range(0, kernel["MIWaveTile"][1]):
@@ -7589,6 +7591,7 @@ class KernelWriterAssembly(KernelWriter):
 
     tc                = tP["tensorChar"]
     imod              = Code.Module("LocalReadDo%s_I%s"%(tc,iui))
+    pack              = Code.Module("pack%s_I%s"%(tc,iui))
     instruction       = tP["localReadInstruction"]
     numOffsets        = instruction.numOffsets
     blockWidth        = instruction.blockWidth
@@ -7674,8 +7677,8 @@ class KernelWriterAssembly(KernelWriter):
 
     # pack register
     needPack = blockWidth < 1
+    pack     = Code.Module("pack%s_I%s"%(tc,iui))
     if needPack:
-      pack       = Code.Module("pack%s_I%s"%(tc,iui))
       tmpVgprIdx = self.vgprPool.checkOut(self.numVgprValuAPerBlock if tc == 'A' else self.numVgprValuBPerBlock)
       pack.addTempVgpr(tmpVgprIdx)
 
@@ -7729,10 +7732,8 @@ class KernelWriterAssembly(KernelWriter):
             elif kernel["ProblemType"]["DataType"].isInt8x4() or kernel["ProblemType"]["DataType"].isSingle():
               localReadCode.addText(self.assert_eq(destVgpr, 1.0))
 
-    if needPack:
-      return imod, pack
+    return imod, pack
 
-    return imod
 
 
   ##############################################################################

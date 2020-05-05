@@ -381,10 +381,8 @@ class KernelWriter(metaclass=abc.ABCMeta):
       iterCode.addInst("s_setprio ","3","Raise priority while processing macs")
       macIterItem = macIterCode.flatitems()
       # pop the first code which is s_nop 1 for packing
-      if kernel["EnableMatrixInstruction"] and not kernel["TransposeLDS"] and \
-      (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()):
-        item = macIterItem.pop(0)
-        iterCode.addCode(item)
+      item = macIterItem.pop(0)
+      iterCode.addCode(item)
 
       while macIterItem:
         item = macIterItem.pop(0)
@@ -449,9 +447,7 @@ class KernelWriter(metaclass=abc.ABCMeta):
             if packB.items():
               packAB.addCode(packB.items().pop(0))
 
-        # remove s_nop for packing if TLDS
-        if (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and not kernel["TransposeLDS"]:
-          macIterItems.pop(0)
+        macIterItems.pop(0)
 
         iterCode.addCode(waitLWCode)
         iterCode.addCode(syncCode)
@@ -522,7 +518,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
       assert 0, "Unsupported scheduleIterAlg=%u"%self.scheduleIterAlg
 
     for item in list(packCode.items()):
-      self.vgprPool.checkIn(item.tempVgpr)
+      if item.tempVgpr != None:
+        self.vgprPool.checkIn(item.tempVgpr)
+        item.tempVgpr = None
 
     if isinstance(waitCode, Code.WaitCnt):
       # Set the waitCount, based on the new iter schedule
@@ -802,23 +800,16 @@ class KernelWriter(metaclass=abc.ABCMeta):
       for iui in range(0,kernel["InnerUnroll"]):
         if self.enable["LocalRead"]:
           if u < kernel["LoopIters"] - kernel["PrefetchLocalRead"]:
-            if kernel["EnableMatrixInstruction"] and \
-              (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
-              not kernel["TransposeLDS"] :
-              # Reading 16-bit data from LDS requires packing when ECC enabled
-              kl.append(self.comment("local read a"))
-              localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, ((u+pflr)*kernel["InnerUnroll"] + iui), tensorParametersA)
-              kl.append(localReadCodeA)
-              kl.append(self.comment("local read b"))
-              localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, ((u+pflr)*kernel["InnerUnroll"] + iui), tensorParametersB)
-              kl.append(localReadCodeB)
-              pack[plrIdx].addCode(packCodeA)
-              pack[plrIdx].addCode(packCodeB)
-            else:
-              kl.append(self.comment("local read a"))
-              kl.append(self.localReadDo(kernel, plrIdx, iui, 0,((u+pflr)*kernel["InnerUnroll"] + iui), tensorParametersA))
-              kl.append(self.comment("local read b"))
-              kl.append(self.localReadDo(kernel, plrIdx, iui, 0,((u+pflr)*kernel["InnerUnroll"] + iui), tensorParametersB))
+            # Reading 16-bit data from LDS requires packing when ECC enabled
+            kl.append(self.comment("local read a"))
+            localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, ((u+pflr)*kernel["InnerUnroll"] + iui), tensorParametersA)
+            kl.append(localReadCodeA)
+            kl.append(self.comment("local read b"))
+            localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, ((u+pflr)*kernel["InnerUnroll"] + iui), tensorParametersB)
+            kl.append(localReadCodeB)
+            pack[plrIdx].addCode(packCodeA)
+            pack[plrIdx].addCode(packCodeB)
+
             kl.append(self.comment("local read inc a"))
             kl.append(self.localReadInc(kernel, iui, tensorParametersA))
             kl.append(self.comment("local read inc b"))
@@ -832,7 +823,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
         if kernel["EnableMatrixInstruction"]:
           kl.append(pack[luIdx])
           for item in list(pack[luIdx].items()):
-            self.vgprPool.checkIn(item.tempVgpr)
+            if item.tempVgpr != None:
+              self.vgprPool.checkIn(item.tempVgpr)
+              item.tempVgpr = None
           kl.append(self.mfmaIter(kernel, luIdx, kernel["InnerUnroll"]))
         else:
           kl.append(self.macIter(kernel, luIdx, kernel["InnerUnroll"], useMacro=not isOptNLL ))
@@ -958,23 +951,16 @@ class KernelWriter(metaclass=abc.ABCMeta):
             pack[plrIdx] = Code.Module()
             for espi in range(0, (self.prefetchAcrossPersistent and kernel["ExpandPointerSwap"])+1):
               for iui in range(0,kernel["InnerUnroll"]):
-                if kernel["EnableMatrixInstruction"] and \
-                  (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
-                  not kernel["TransposeLDS"]:
-                  # Reading 16-bit data from LDS requires packing when ECC enabled
-                  kl.append(self.comment("local read prefetch a"))
-                  localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, espi, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersA)
-                  kl.append(localReadCodeA)
-                  kl.append(self.comment("local read prefetch b"))
-                  localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, espi, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersB)
-                  kl.append(localReadCodeB)
-                  pack[plrIdx].addCode(packCodeA)
-                  pack[plrIdx].addCode(packCodeB)
-                else:
-                  kl.append(self.comment("local read prefetch a"))
-                  kl.append(self.localReadDo(kernel, plrIdx, iui, espi,(plrIdx*kernel["InnerUnroll"]+iui), tensorParametersA))
-                  kl.append(self.comment("local read prefetch b"))
-                  kl.append(self.localReadDo(kernel, plrIdx, iui, espi,(plrIdx*kernel["InnerUnroll"]+iui), tensorParametersB))
+                # Reading 16-bit data from LDS requires packing when ECC enabled
+                kl.append(self.comment("local read prefetch a"))
+                localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, espi, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersA)
+                kl.append(localReadCodeA)
+                kl.append(self.comment("local read prefetch b"))
+                localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, espi, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersB)
+                kl.append(localReadCodeB)
+                pack[plrIdx].addCode(packCodeA)
+                pack[plrIdx].addCode(packCodeB)
+
                 kl.append(self.comment("local read inc a"))
                 kl.append(self.localReadInc(kernel, iui, tensorParametersA))
                 kl.append(self.comment("local read inc b"))
@@ -1067,23 +1053,15 @@ class KernelWriter(metaclass=abc.ABCMeta):
           for plrIdx in range(0, kernel["PrefetchLocalRead"]):
             pack[plrIdx] = Code.Module()
             for iui in range(0,kernel["InnerUnroll"]):
-              if kernel["EnableMatrixInstruction"] and \
-                (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
-                not kernel["TransposeLDS"] :
-                # Reading 16-bit data from LDS requires packing when ECC enabled
-                kl.append(self.comment("prefetch local a"))
-                localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersA)
-                kl.append(localReadCodeA)
-                kl.append(self.comment("prefetch local b"))
-                localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersB)
-                kl.append(localReadCodeB)
-                pack[plrIdx].addCode(packCodeA)
-                pack[plrIdx].addCode(packCodeB)
-              else:
-                kl.append(self.comment("prefetch local a"))
-                kl.append(self.localReadDo(kernel, plrIdx, iui, 0, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersA))
-                kl.append(self.comment("prefetch local b"))
-                kl.append(self.localReadDo(kernel, plrIdx, iui, 0, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersB))
+              # Reading 16-bit data from LDS requires packing when ECC enabled
+              kl.append(self.comment("prefetch local a"))
+              localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersA)
+              kl.append(localReadCodeA)
+              kl.append(self.comment("prefetch local b"))
+              localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, (plrIdx*kernel["InnerUnroll"]+iui), tensorParametersB)
+              kl.append(localReadCodeB)
+              pack[plrIdx].addCode(packCodeA)
+              pack[plrIdx].addCode(packCodeB)
               kl.append(self.comment1("local read increment a"))
               kl.append(self.localReadInc(kernel, iui, tensorParametersA))
               kl.append(self.comment1("local read increment b"))
@@ -1116,28 +1094,18 @@ class KernelWriter(metaclass=abc.ABCMeta):
         if (u < kernel["LoopIters"] - kernel["PrefetchLocalRead"]) or kernel["PrefetchGlobalRead"]:
           for iui in range(0,kernel["InnerUnroll"]):
             if self.enable["LocalRead"]:
-              if kernel["EnableMatrixInstruction"] and \
-                (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
-                not kernel["TransposeLDS"] :
-                # Reading 16-bit data from LDS requires packing when ECC enabled
-                localReads.addText(self.comment("local read a"))
-                localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, ((u+pflr)*kernel["InnerUnroll"]+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersA)
-                localReads.addCode(localReadCodeA)
-                localReads.addText(self.comment("local read b"))
-                localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, ((u+pflr)*kernel["InnerUnroll"]+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersB)
-                localReads.addCode(localReadCodeB)
-                localReadsA.addCode(localReadCodeA)
-                localReadsB.addCode(localReadCodeB)
-                pack[plrIdx].addCode(packCodeA)
-                pack[plrIdx].addCode(packCodeB)
-              else:
-                localReads.addText(self.comment("local read a"))
-                localReads.addCode(self.localReadDo(kernel, plrIdx, iui, 0,((u+pflr)*kernel["InnerUnroll"]+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersA))
-                localReads.addText(self.comment("local read b"))
-                localReads.addCode(self.localReadDo(kernel, plrIdx, iui, 0,((u+pflr)*kernel["InnerUnroll"]+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersB))
-                #container for holding local read A & B elements for later re-ordering
-                localReadsA.addCode(self.localReadDo(kernel, plrIdx, iui, 0,((u+pflr)*kernel["InnerUnroll"]+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersA))
-                localReadsB.addCode(self.localReadDo(kernel, plrIdx, iui, 0,((u+pflr)*kernel["InnerUnroll"]+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersB))
+              # Reading 16-bit data from LDS requires packing when ECC enabled
+              localReads.addText(self.comment("local read a"))
+              lduIdx = ((u+pflr)*kernel["InnerUnroll"]+iui) % (kernel["LoopIters"]*kernel["InnerUnroll"])
+              localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, lduIdx, tensorParametersA)
+              localReads.addCode(localReadCodeA)
+              localReads.addText(self.comment("local read b"))
+              localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, lduIdx, tensorParametersB)
+              localReads.addCode(localReadCodeB)
+              localReadsA.addCode(localReadCodeA)
+              localReadsB.addCode(localReadCodeB)
+              pack[plrIdx].addCode(packCodeA)
+              pack[plrIdx].addCode(packCodeB)
 
               # Don't increment the LRO if we are going to reset them below:
               if not isResetLroIter or iui != kernel["InnerUnroll"]-1:
@@ -1393,23 +1361,17 @@ class KernelWriter(metaclass=abc.ABCMeta):
         pack[plrIdx] = Code.Module()
         for iui in range(0,kernel["InnerUnroll"]):
           if self.enable["LocalRead"]:
-            if kernel["EnableMatrixInstruction"] and \
-              (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
-              not kernel["TransposeLDS"] :
-              # Reading 16-bit data from LDS requires packing when ECC enabled
-              localReads.addText(self.comment("local read a"))
-              localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, (((unrollIter+pflr)*kernel["InnerUnroll"])+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersA)
-              localReads.addCode(localReadCodeA)
-              localReads.addText(self.comment("local read b"))
-              localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, (((unrollIter+pflr)*kernel["InnerUnroll"])+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersB)
-              localReads.addCode(localReadCodeB)
-              pack[plrIdx].addCode(packCodeA)
-              pack[plrIdx].addCode(packCodeB)
-            else:
-              localReads.addText(self.comment("local read a"))
-              localReads.addCode(self.localReadDo(kernel, plrIdx, iui, 0, (((unrollIter+pflr)*kernel["InnerUnroll"])+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersA))
-              localReads.addText(self.comment("local read b"))
-              localReads.addCode(self.localReadDo(kernel, plrIdx, iui, 0, (((unrollIter+pflr)*kernel["InnerUnroll"])+iui)%(kernel["LoopIters"]*kernel["InnerUnroll"]), tensorParametersB))
+            # Reading 16-bit data from LDS requires packing when ECC enabled
+            localReads.addText(self.comment("local read a"))
+            lduIdx = (((unrollIter+pflr)*kernel["InnerUnroll"])+iui) % (kernel["LoopIters"]*kernel["InnerUnroll"])
+            localReadCodeA, packCodeA = self.localReadDo(kernel, plrIdx, iui, 0, lduIdx, tensorParametersA)
+            localReads.addCode(localReadCodeA)
+            localReads.addText(self.comment("local read b"))
+            localReadCodeB, packCodeB = self.localReadDo(kernel, plrIdx, iui, 0, lduIdx, tensorParametersB)
+            localReads.addCode(localReadCodeB)
+            pack[plrIdx].addCode(packCodeA)
+            pack[plrIdx].addCode(packCodeB)
+
             if kernel["InnerUnroll"] and iui != kernel["InnerUnroll"]-1:
               localReads.addText(self.comment("unroll increments:"))
               localReads.addText(self.comment("local read inc a"))
@@ -1513,7 +1475,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
       else:
         for i in range(kernel["PrefetchLocalRead"]):
           for item in list(pack[i].items()):
-            self.vgprPool.checkIn(item.tempVgpr)
+            if item.tempVgpr != None:
+              self.vgprPool.checkIn(item.tempVgpr)
+              item.tempVgpr = None
 
     if self.staggerU and self.actualSummationLoops>1:
       kl.append(self.comment("remove stagger offsets"))
@@ -1594,23 +1558,16 @@ class KernelWriter(metaclass=abc.ABCMeta):
       pack[0] = Code.Module()
       for iui in range(0,tailLoopInnerUnroll):
         if self.enable["LocalRead"]:
-          if kernel["EnableMatrixInstruction"] and \
-            (kernel["ProblemType"]["DataType"].isBFloat16() or kernel["ProblemType"]["DataType"].isHalf()) and \
-            not kernel["TransposeLDS"] :
-            # Reading 16-bit data from LDS requires packing when ECC enabled
-            kl.append(self.comment("local read a"))
-            localReadCodeA, packCodeA = self.localReadDo(kernel, 0, iui, 0, 0, tensorParametersA)
-            kl.append(localReadCodeA)
-            kl.append(self.comment("local read b"))
-            localReadCodeB, packCodeB = self.localReadDo(kernel, 0, iui, 0, 0, tensorParametersB)
-            kl.append(localReadCodeB)
-            pack[0].addCode(packCodeA)
-            pack[0].addCode(packCodeB)
-          else:
-            kl.append(self.comment("local read a"))
-            kl.append(self.localReadDo(kernel, 0, iui, 0, 0, tensorParametersA))
-            kl.append(self.comment("local read b"))
-            kl.append(self.localReadDo(kernel, 0, iui, 0, 0, tensorParametersB))
+          # Reading 16-bit data from LDS requires packing when ECC enabled
+          kl.append(self.comment("local read a"))
+          localReadCodeA, packCodeA = self.localReadDo(kernel, 0, iui, 0, 0, tensorParametersA)
+          kl.append(localReadCodeA)
+          kl.append(self.comment("local read b"))
+          localReadCodeB, packCodeB = self.localReadDo(kernel, 0, iui, 0, 0, tensorParametersB)
+          kl.append(localReadCodeB)
+          pack[0].addCode(packCodeA)
+          pack[0].addCode(packCodeB)
+
           kl.append(self.comment("local read inc a"))
           kl.append(self.localReadInc(kernel, iui, tensorParametersA))
           kl.append(self.comment("local read inc b"))
@@ -1621,7 +1578,9 @@ class KernelWriter(metaclass=abc.ABCMeta):
         if kernel["EnableMatrixInstruction"]:
           kl.append(pack[0])
           for item in list(pack[0].items()):
-            self.vgprPool.checkIn(item.tempVgpr)
+            if item.tempVgpr != None:
+              self.vgprPool.checkIn(item.tempVgpr)
+              item.tempVgpr = None
           kl.append(self.mfmaIter(kernel, 0, tailLoopInnerUnroll, True))
         else:
           kl.append(self.macIter(kernel, 0, tailLoopInnerUnroll, True))

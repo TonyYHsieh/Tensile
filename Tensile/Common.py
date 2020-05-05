@@ -762,8 +762,8 @@ validParameters = {
     # optimized value is 128
     "LdsBlockSizePerPad":          [-1, 0, 64, 128, 256],
 
-    #Transpose LDS format. Local store in Coalsced dimension , same as optimized global fetch dimension . applicable only in TLU=0 case for miSIMD(s)
-    "TransposeLDS":                [-1, 1, 0],
+    "UnrollMajorLDSA":             [False, True],
+    "UnrollMajorLDSB":             [False, True],
 
     # tinkered with adding extra syncs or waits in the assembly kernels to see if it would improve the sequencing between workgroups, "fully synchronous scheduling" is WAY more promising; this can be deprecated
     "PerformanceSyncLocation":    list(range(-1, 16*16+1)),
@@ -827,7 +827,8 @@ defaultBenchmarkCommonParameters = [
     {"LdsPadA":                   [ 0 ] },
     {"LdsPadB":                   [ 0 ] },
     {"LdsBlockSizePerPad":        [ 0 ] },
-    {"TransposeLDS":              [ 0 ] },
+    {"UnrollMajorLDSA":           [ False ] },
+    {"UnrollMajorLDSB":           [ False ] },
     {"MaxOccupancy":              [ 40 ] },
     {"VectorWidth":               [ -1 ] },
     {"VectorStore":               [ -1 ] },

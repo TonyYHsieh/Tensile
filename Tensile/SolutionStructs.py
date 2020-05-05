@@ -1687,9 +1687,6 @@ class Solution:
         state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
         state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
 
-      state["UnrollMajorLDSA"] = state["TransposeLDS"]
-      state["UnrollMajorLDSB"] = state["TransposeLDS"]
-
       state["WorkGroup"][0] = state["SubGroup0"]
       state["WorkGroup"][1] = state["SubGroup1"]
 
@@ -2563,22 +2560,21 @@ class Solution:
       state["LdsPadB"] = 0 if state["ProblemType"]["TLUB"] else state["VectorWidth"]
       assert(state["LdsPadB"] >= 0)
 
-    if state["TransposeLDS"] == 1 and (not state["EnableMatrixInstruction"]):
-        reject(state, "TransposeLds Supports only in EnableMatrixInstruction=1")
+    if (state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]) and (not state["EnableMatrixInstruction"]):
+        reject(state, "UnrollMajorLDS Supports only in EnableMatrixInstruction=1")
 
-    if state["EnableMatrixInstruction"]:
-      if state["TransposeLDS"] == 1:
-        if state["ProblemType"]["TLUA"] and  state["ProblemType"]["TLUB"]:
-          reject(state, "TransposeLds requires TLUA=0 or TLUB=0")
-    if state["TransposeLDS"] == 1:
-      if state["LdsBlockSizePerPad"] == -1:
+    if state["LdsBlockSizePerPad"] == -1:
+      if (state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]):
         state["LdsBlockSizePerPad"] = 256
-    elif state["TransposeLDS"] == 0 and state["LdsBlockSizePerPad"] != 0:
-      reject(state, "didn't support LdsBlockSizePerPad when TransposeLDS is disabled")
+      else:
+        state["LdsBlockSizePerPad"] = 0
+
+    if (state["UnrollMajorLDSA"] == False or state["UnrollMajorLDSB"] == False) and state["LdsBlockSizePerPad"] != 0:
+      reject(state, "didn't support LdsBlockSizePerPad when UnrollMajorLDS is disabled")
 
     if state["LocalReadVectorWidth"] != -1:
-      if not state["TransposeLDS"] == 1:
-        reject(state, "LocalReadVectorWidth requires TransposeLDS=1")
+      if (state["UnrollMajorLDSA"] == False or state["UnrollMajorLDSB"] == False):
+        reject(state, "LocalReadVectorWidth requires UnrollMajorLDS=1")
 
     ldsAlign = int(64 / state["ProblemType"]["DataType"].numRegisters())
 
@@ -2704,8 +2700,7 @@ class Solution:
       # DirectToLds loads return 256 bytes/wave
       # If fractional, ensure we are using all of the bytes that will be delivered
 
-      if elementMultipleOk \
-        and state["NumThreads"] % globalParameters["WavefrontWidth"] == 0:
+      if elementMultipleOk and state["NumThreads"] % globalParameters["WavefrontWidth"] == 0:
 
         if state["EnableMatrixInstruction"]:
           # use with transposeLDS
@@ -2713,7 +2708,7 @@ class Solution:
             and (( not state["ProblemType"]["TransposeA"]  \
                    and state["LSCA"] * numBytes == 256 * wavefronts \
                    and state["LSCA"] * numBytes == state["NumThreads"] * 4 ) or \
-                 ( state["ProblemType"]["TransposeA"] and state["TransposeLDS"]  \
+                 ( state["ProblemType"]["TransposeA"] and state["UnrollMajorLDSA"]  \
                    and state["LSCA"] * state["LSPA"] * numBytes == 256 * wavefronts \
                    and state["LSCA"] * state["LSPA"] * numBytes == state["NumThreads"] * 4)) :
             state["DirectToLdsA"] = True
@@ -2723,7 +2718,7 @@ class Solution:
             and (( state["ProblemType"]["TransposeB"]  \
                    and state["LSCB"] * numBytes == 256 * wavefronts \
                    and state["LSCB"] * numBytes == state["NumThreads"] * 4 ) or \
-                 ( not state["ProblemType"]["TransposeB"] and state["TransposeLDS"]  \
+                 ( not state["ProblemType"]["TransposeB"] and state["UnrollMajorLDSB"]  \
                    and state["LSCB"] * state["LSPB"] * numBytes == 256 * wavefronts \
                    and state["LSCB"] * state["LSPB"] * numBytes == state["NumThreads"] * 4)) :
             state["DirectToLdsB"] = True

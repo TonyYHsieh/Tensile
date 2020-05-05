@@ -2476,7 +2476,7 @@ class KernelWriterSource(KernelWriter):
             % (self.indent, tP["tensorChar"], r, s, \
             (("+TT%s"%tP["tileChar"]) if black else ""), \
             tP["tensorChar"], r, tP["tileChar"], s, self.endLine)
-    return kStr
+    return kStr, ""
 
   ##############################################################################
   # Shift Vector Components d0,1
