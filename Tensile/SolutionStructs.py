@@ -2080,16 +2080,22 @@ class Solution:
         reject(state, "Matrix instructions for half types are natively accumulated" + \
          " in fp32 precision. Please add the following config:" + \
          "\n - HighPrecisionAccumulate: True")
-      if (state["LdsBlockSizePerPad"] != 0):
-        if (not state["UnrollMajorLDSA"]) or (not state["UnrollMajorLDSB"]):
-          reject(state, "didn't support LdsBlockSizePerPad on tile major LDS yet")
-        if state["LdsBlockSizePerPad"] < state["DepthU"]:
-          reject(state, "reject: DepthU %u > LdsBlockSizePerPad %u" % (state["DepthU"], state["LdsBlockSizePerPad"]))
+      if state["LdsBlockSizePerPadA"] != 0 and state["UnrollMajorLDSA"] == False:
+        reject(state, "didn't support LdsBlockSizePerPadA on tile major LDS yet")
+        if state["LdsBlockSizePerPadA"] < state["DepthU"]:
+          reject(state, "reject: DepthU %u > LdsBlockSizePerPadA %u" % (state["DepthU"], state["LdsBlockSizePerPad"]))
+
+      if state["LdsBlockSizePerPadB"] != 0 and state["UnrollMajorLDSB"] == False:
+        reject(state, "didn't support LdsBlockSizePerPadB on tile major LDS yet")
+        if state["LdsBlockSizePerPadB"] < state["DepthU"]:
+          reject(state, "reject: DepthU %u > LdsBlockSizePerPadB %u" % (state["DepthU"], state["LdsBlockSizePerPad"]))
     else:
       if state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]:
         reject(state, "didn't support UnrollMajorLDS in VALU mode yet")
-      if (state["LdsBlockSizePerPad"] != 0):
+
+      if state["LdsBlockSizePerPadA"] != 0 or state["LdsBlockSizePerPadB"] != 0:
         reject(state, "didn't support LdsBlockSizePerPad in VALU mode yet")
+
       if state["ThreadTile0"] > 16 or state["ThreadTile1"] > 16:
         reject(state, "Invalid value for ThreadTile")
 
@@ -2563,14 +2569,11 @@ class Solution:
     if (state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]) and (not state["EnableMatrixInstruction"]):
         reject(state, "UnrollMajorLDS Supports only in EnableMatrixInstruction=1")
 
-    if state["LdsBlockSizePerPad"] == -1:
-      if (state["UnrollMajorLDSA"] or state["UnrollMajorLDSB"]):
-        state["LdsBlockSizePerPad"] = 256
-      else:
-        state["LdsBlockSizePerPad"] = 0
+    if state["LdsBlockSizePerPadA"] == -1:
+      state["LdsBlockSizePerPadA"] = 256
 
-    if (state["UnrollMajorLDSA"] == False or state["UnrollMajorLDSB"] == False) and state["LdsBlockSizePerPad"] != 0:
-      reject(state, "didn't support LdsBlockSizePerPad when UnrollMajorLDS is disabled")
+    if state["LdsBlockSizePerPadB"] == -1:
+      state["LdsBlockSizePerPadB"] = 256
 
     if state["LocalReadVectorWidth"] != -1:
       if (state["UnrollMajorLDSA"] == False or state["UnrollMajorLDSB"] == False):
@@ -2578,10 +2581,10 @@ class Solution:
 
     ldsAlign = int(64 / state["ProblemType"]["DataType"].numRegisters())
 
-    padInterval = state["LdsBlockSizePerPad"] // bpeAB
     if state["UnrollMajorLDSA"]:
       ldsNumElementsA = (state["DepthU"] + state["LdsPadA"]) * state["MacroTile0"]
-      if state["LdsBlockSizePerPad"] != 0:
+      padInterval = state["LdsBlockSizePerPadA"] // bpeAB
+      if padInterval != 0:
         ldsNumElementsA = int((state["DepthU"] * state["MacroTile0"]) / padInterval * (padInterval + state["LdsPadA"]))
       ldsNumElementsAlignedA = roundUpToNearestMultiple(ldsNumElementsA, ldsAlign)
     else:
@@ -2590,7 +2593,8 @@ class Solution:
 
     if state["UnrollMajorLDSB"]:
       ldsNumElementsB = (state["DepthU"] + state["LdsPadB"]) * state["MacroTile1"]
-      if state["LdsBlockSizePerPad"] != 0:
+      padInterval = state["LdsBlockSizePerPadB"] // bpeAB
+      if padInterval != 0:
         ldsNumElementsB = int((state["DepthU"] * state["MacroTile1"]) / padInterval * (padInterval + state["LdsPadB"]))
       ldsNumElementsAlignedB = roundUpToNearestMultiple(ldsNumElementsB, ldsAlign)
     else:
@@ -2602,15 +2606,13 @@ class Solution:
     if state["PrefetchGlobalRead"]:
       state["LdsNumElementsAlignedA"] = ldsNumElementsAlignedA
       state["LdsNumElementsAlignedB"] = ldsNumElementsAlignedB
-      state["LdsOffsetB"] = state["LdsOffsetA"] \
-        + state["LdsNumElementsAlignedA"]
+      state["LdsOffsetB"] = state["LdsOffsetA"] + state["LdsNumElementsAlignedA"]
 
       offsetBlk = state["LdsOffsetB"] + ldsNumElementsAlignedB
       offsetBlk = int(2**(math.ceil(math.log(offsetBlk, 2))))
 
       state["LdsOffsetA_Blk"] = offsetBlk
-      state["LdsOffsetB_Blk"] = state["LdsOffsetA_Blk"] \
-        + state["LdsNumElementsAlignedA"]
+      state["LdsOffsetB_Blk"] = state["LdsOffsetA_Blk"] + state["LdsNumElementsAlignedA"]
       ldsNumElementsAB = state["LdsOffsetB_Blk"]+ ldsNumElementsB
     else:
       state["LdsOffsetB"] = ldsNumElementsAlignedA

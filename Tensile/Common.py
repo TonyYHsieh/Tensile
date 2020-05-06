@@ -760,7 +760,8 @@ validParameters = {
     # Padding boundary for LDS. defines block-size for pad insertion. for every 'LdsBlockSizePerPad' bytes, LDS padding (pad value from LdsPad parameter)
     # is added (readOffset aware of the pad and adjusts offset value based on this parameter value).good rule of thumb is LdsBlockSizePerPad >= unrollDepth * BPE
     # optimized value is 128
-    "LdsBlockSizePerPad":          [-1, 0, 64, 128, 256],
+    "LdsBlockSizePerPadA":         [-1, 0, 64, 128, 256],
+    "LdsBlockSizePerPadB":         [-1, 0, 64, 128, 256],
 
     "UnrollMajorLDSA":             [False, True],
     "UnrollMajorLDSB":             [False, True],
@@ -826,7 +827,8 @@ defaultBenchmarkCommonParameters = [
     {"KernelLanguage":            [ "Source" ] },
     {"LdsPadA":                   [ 0 ] },
     {"LdsPadB":                   [ 0 ] },
-    {"LdsBlockSizePerPad":        [ 0 ] },
+    {"LdsBlockSizePerPadA":       [ 0 ] },
+    {"LdsBlockSizePerPadB":       [ 0 ] },
     {"UnrollMajorLDSA":           [ False ] },
     {"UnrollMajorLDSB":           [ False ] },
     {"MaxOccupancy":              [ 40 ] },

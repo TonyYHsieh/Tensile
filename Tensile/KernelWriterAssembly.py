@@ -4666,7 +4666,7 @@ class KernelWriterAssembly(KernelWriter):
   def lwaFirstOffset(self, kernel, tP):
     kStr = ""
     tc = tP["tensorChar"]
-    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
     #"lwFOA = lwA%s + lwA%s*MT%s" \
     #    % (tP["tileChar"], self.unrollChar, tP["tileChar"])
     uReg = tP["gpr"]["uReg2" if kernel["GlobalSplitU"] > 1 else "uReg"]
@@ -4692,10 +4692,10 @@ class KernelWriterAssembly(KernelWriter):
             "lwFO%s = (lw%s%s + lw%s%s*(MT%s+PAD))*bpe" % (tc, tc, tc, tc, self.unrollChar, tP["tileChar"]) )
 
       # LdsBlockSizePerPad: add padding
-      if kernel["LdsBlockSizePerPad"] != 0 and kernel["LdsPad%s"%tc] != 0:
+      if kernel["LdsBlockSizePerPad%s"%tc] != 0 and kernel["LdsPad%s"%tc] != 0:
         tmpVgpr = self.vgprPool.checkOut(2)
         tmpSgpr = self.getTmpSgpr(1)
-        kStr += vectorStaticDivide(uReg, destVgpr, kernel["LdsBlockSizePerPad"], tmpVgpr, tmpSgpr)
+        kStr += vectorStaticDivide(uReg, destVgpr, kernel["LdsBlockSizePerPad%s"%tc], tmpVgpr, tmpSgpr)
         kStr += staticMultiply(vgpr(uReg), vgpr(uReg), kernel["LdsPad%s"%tc] * tP["bpe"], sgpr(tmpSgpr))
         kStr += inst("v_add_u32", vgpr(destVgpr), vgpr(uReg), vgpr(destVgpr), "")
         self.vgprPool.checkIn(tmpVgpr)
@@ -4891,7 +4891,7 @@ class KernelWriterAssembly(KernelWriter):
 
     # get constant parameter
     dividendReg    = "Serial" # local serial
-    LdsPad         = kernel["LdsPadA"] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad         = kernel["LdsPadA"] if kernel["LdsBlockSizePerPadA"] == 0 else 0
     MIBShape0      = kernel["MatrixInstM"] * kernel["MatrixInstBM"] # matrix instruction MN shape for M
     dividendForK   = kernel["MatrixInstM"] * kernel["MatrixInstB"]
     inputPerThread = kernel["MatrixInstM"] * kernel["MatrixInstK"] * kernel["MatrixInstB"] // globalParameters["WavefrontWidth"]
@@ -4996,7 +4996,7 @@ class KernelWriterAssembly(KernelWriter):
 
     # get constant parameter
     dividendReg    = "Serial" # local serial
-    LdsPad         = kernel["LdsPadB"] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad         = kernel["LdsPadB"] if kernel["LdsBlockSizePerPadB"] == 0 else 0
     dividendForK   = kernel["MatrixInstN"] * kernel["MatrixInstB"]
     inputPerThread = kernel["MatrixInstN"] * kernel["MatrixInstK"] * kernel["MatrixInstB"] // globalParameters["WavefrontWidth"]
     strideN        = 1
@@ -5078,7 +5078,7 @@ class KernelWriterAssembly(KernelWriter):
     dividendReg = "Serial"
     tIdx        = tP["tensorIdx"]
     tc          = tP["tensorChar"]
-    LdsPad      = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad      = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
     divisor     = kernel["SubGroup0"] * kernel["SubGroup1"]
 
     # generate instruction
@@ -5132,7 +5132,7 @@ class KernelWriterAssembly(KernelWriter):
     dividendReg = "Serial"
     tc          = tP["tensorChar"]
     tIdx        = tP["tensorIdx"]
-    LdsPad      = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad      = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
     divisor     = kernel["SubGroup0"] * kernel["SubGroup1"]
     mtAddPad    = kernel["MacroTile%u"%tP["tensorIdx"]] + LdsPad
 
@@ -5145,8 +5145,8 @@ class KernelWriterAssembly(KernelWriter):
     kStr += inst("_v_add_lshl_u32", vgpr("LocalReadAddr%s"%tc), vgpr(sgid), vgpr(tP["gpr"]["lro"]), hex(log2(tP["bpe"])), "o = (lro%s*VW+sgid*MT%u)*bpe"%(tc, tIdx) )
 
     # LdsBlockSizePerPad: add padding
-    if kernel["LdsBlockSizePerPad"] != 0 and kernel["LdsPad%s"%tc] !=0:
-      kStr += vectorStaticDivide(rReg, "LocalReadAddr%s"%tc, kernel["LdsBlockSizePerPad"], tmpVgpr, tmpSgpr)
+    if kernel["LdsBlockSizePerPad%s"%tc] != 0 and kernel["LdsPad%s"%tc] !=0:
+      kStr += vectorStaticDivide(rReg, "LocalReadAddr%s"%tc, kernel["LdsBlockSizePerPad%s"%tc], tmpVgpr, tmpSgpr)
       kStr += staticMultiply(vgpr(rReg), vgpr(rReg), kernel["LdsPad%s"%tc] * tP["bpe"], sgpr(tmpSgpr))
       kStr += inst("v_add_u32", vgpr("LocalReadAddr%s"%tc), vgpr(rReg), vgpr("LocalReadAddr%s"%tc), "")
 
@@ -5843,7 +5843,7 @@ class KernelWriterAssembly(KernelWriter):
           stmp = self.getTmpSgpr(1)
           for tP in [self.tPA, self.tPB]:
             tc = tP["tensorChar"]
-            LdsPad = kernel["LdsPad%s" % tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+            LdsPad = kernel["LdsPad%s" % tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
             inc = kernel["LocalSplitU"]*(kernel["MacroTile%u"%tP["tensorIdx"]]+LdsPad)*tP["bpe"]
             kStr += inst("s_mov_b32", sgpr(stmp), inc, "tailloop lds offset")
             kStr += inst("s_mul_i32", sgpr(stmp), sgpr("OrigLoopCounter"), sgpr(stmp), "scale by mul")
@@ -7107,7 +7107,7 @@ class KernelWriterAssembly(KernelWriter):
 
 
                 if directToLdsLoads != 0:
-                  LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+                  LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
                   if not kernel["UseInstOffsetForGRO"]:
                     ldsOffset = ldsInc + (ldsInc//256) * LdsPad * tP["bpe"]
                     loadModule.addInst("s_add_u32", "m0", "m0", hex(ldsOffset), \
@@ -7292,7 +7292,7 @@ class KernelWriterAssembly(KernelWriter):
     # print("0lspaOffset", lspaOffset)
     # print("0lscaOffset", lscaOffset)
 
-    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
     lds_stride = (kernel["DepthU"] + LdsPad) if kernel["UnrollMajorLDS%s" % tP["tensorChar"]] \
             else (kernel[tP["mt"]] + LdsPad)
 
@@ -7315,8 +7315,8 @@ class KernelWriterAssembly(KernelWriter):
     # print("offsetElements", offsetElements)
     offsetBytes = offsetElements*tP["bpe"]
 
-    if kernel["LdsBlockSizePerPad"] != 0 and kernel["LdsPad%s"%tc] != 0:
-      offsetBytes = offsetBytes + (offsetBytes // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
+    if kernel["LdsBlockSizePerPad%s"%tc] != 0 and kernel["LdsPad%s"%tc] != 0:
+      offsetBytes = offsetBytes + (offsetBytes // kernel["LdsBlockSizePerPad%s"%tc]) * kernel["LdsPad%s"%tc] * tP["bpe"]
 
     offsetBytes += tP["localWriteSwapByteOffset"]
 
@@ -7542,7 +7542,7 @@ class KernelWriterAssembly(KernelWriter):
     kStr = ""
 
     tc = tP["tensorChar"]
-    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
 
     if self.inTailLoop:
       inc = kernel["LocalSplitU"] * (kernel["MacroTile%u" % tP["tensorIdx"]] + LdsPad) * tP["bpe"]
@@ -7664,7 +7664,7 @@ class KernelWriterAssembly(KernelWriter):
     MIWaveGropuShape = [ kernel["MatrixInstM"] * kernel["MatrixInstBM"] * kernel["MIWaveGroup"][0], \
                          kernel["MatrixInstN"] * kernel["MatrixInstBN"] * kernel["MIWaveGroup"][1] ]
 
-    LdsPad           = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad"] == 0 else 0
+    LdsPad           = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
     tileStride       = 1
     UnrollStride     = kernel["MacroTile%s" % tP["tensorChar"]] + LdsPad
     if kernel["UnrollMajorLDS%s" % tP["tensorChar"]]:
@@ -7710,8 +7710,8 @@ class KernelWriterAssembly(KernelWriter):
         for oIdx in range(0, numOffsets):
           offset_val = (vIdx * numOffsets+oIdx) * MIWaveGropuShape[tIdx] * tileStride
           offset_val = (rIdx * UnrollStride + offset_val + tP["localReadOffset"]) * tP["bpe"]
-          if kernel["LdsBlockSizePerPad"] != 0:
-            offset_val = offset_val + (offset_val // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
+          if kernel["LdsBlockSizePerPad%s"%tc] != 0:
+            offset_val = offset_val + (offset_val // kernel["LdsBlockSizePerPad%s"%tc]) * kernel["LdsPad%s"%tc] * tP["bpe"]
           offset_val = offset_val + tP["localReadSwapByteOffset"]
           paramList.append(int(offset_val))
 
