@@ -2798,19 +2798,32 @@ class Solution:
         state["_UseSgprForGRO"] = False
         #reject(state, "PBC with wide load has insufficient overlap guarantees- try GRVW=1 or adding appropriate Assert*ElementMultiple")
 
-    if not bufferLoad or not state["GuaranteeNoPartialA"]:
-      # Restrict GRVW/VW combos so shift-ptr logic will work
-      if state["GlobalLoadVectorWidthA"] > 1 \
-          and state["GlobalLoadVectorWidthA"] != state["VectorWidth"]:
-          reject(state, "GlobalLoadVectorWidthA %u must be == VectorWidth %u or == 1" % \
-                  (state["GlobalLoadVectorWidthA"], state["VectorWidth"]))
+    if state["EnableMatrixInstruction"]:
+      cont1 = not state["GuaranteeNoPartialA"]
+      cont2 = ((state["MIOutputVectorWidth"] % state["GlobalLoadVectorWidthA"]) != 0)
+      if cont1 and cont2:
+        reject(state, "GlobalLoadVectorWidthA %u %% MIOutputVectorWidth %u must be 0" % \
+          (state["GlobalLoadVectorWidthA"], state["MIOutputVectorWidth"]))
 
-    if not bufferLoad or not state["GuaranteeNoPartialB"]:
-      # Restrict GRVW/VW combos so shift-ptr logic will work
-      if state["GlobalLoadVectorWidthB"] > 1 \
-          and state["GlobalLoadVectorWidthB"] != state["VectorWidth"]:
-          reject(state, "GlobalLoadVectorWidthB %u must be == VectorWidth %u or == 1" % \
-                  (state["GlobalLoadVectorWidthB"], state["VectorWidth"]))
+      cont1 = not state["GuaranteeNoPartialB"]
+      cont2 = ((state["MIOutputVectorWidth"] % state["GlobalLoadVectorWidthB"]) != 0)
+      if cont1 and cont2:
+        reject(state, "GlobalLoadVectorWidthB %u %% MIOutputVectorWidth %u must be 0" % \
+          (state["GlobalLoadVectorWidthB"], state["MIOutputVectorWidth"]))
+    else:
+      if not bufferLoad or not state["GuaranteeNoPartialA"]:
+        # Restrict GRVW/VW combos so shift-ptr logic will work
+        if state["GlobalLoadVectorWidthA"] > 1 \
+            and state["GlobalLoadVectorWidthA"] != state["VectorWidth"]:
+            reject(state, "GlobalLoadVectorWidthA %u must be == VectorWidth %u or == 1" % \
+                    (state["GlobalLoadVectorWidthA"], state["VectorWidth"]))
+
+      if not bufferLoad or not state["GuaranteeNoPartialB"]:
+        # Restrict GRVW/VW combos so shift-ptr logic will work
+        if state["GlobalLoadVectorWidthB"] > 1 \
+            and state["GlobalLoadVectorWidthB"] != state["VectorWidth"]:
+            reject(state, "GlobalLoadVectorWidthB %u must be == VectorWidth %u or == 1" % \
+                    (state["GlobalLoadVectorWidthB"], state["VectorWidth"]))
 
     # these work everywhere, no special restrictions
     state["AssertMinApproxSize"] = 0
