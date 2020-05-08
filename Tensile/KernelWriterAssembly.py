@@ -7641,7 +7641,7 @@ class KernelWriterAssembly(KernelWriter):
                 kernel["ProblemType"]["DataType"].isSingle():
               localReadCode.addText(self.assert_eq(destVgpr, 1.0))
 
-    return imod
+    return imod, pack
 
 
   ##############################################################################
