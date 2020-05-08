@@ -1687,11 +1687,12 @@ class Solution:
         state["SubGroup0"]   = state["MIWaveGroup"][0] * (globalParameters["WavefrontWidth"] // state["MatrixInstN"])
         state["SubGroup1"]   = state["MIWaveGroup"][1] * state["MatrixInstN"]
 
-      state["WorkGroup"][0] = state["SubGroup0"]
-      state["WorkGroup"][1] = state["SubGroup1"]
-
-      state["ThreadTile"][0] = state["ThreadTile0"]
-      state["ThreadTile"][1] = state["ThreadTile1"]
+       # don't change it if parameter wrapper is used
+       # state["WorkGroup"][0] = state["SubGroup0"]
+       # state["WorkGroup"][1] = state["SubGroup1"]
+       #
+       # state["ThreadTile"][0] = state["ThreadTile0"]
+       # state["ThreadTile"][1] = state["ThreadTile1"]
 
     elif EnableMatrixInstruction == False:
       state["ThreadTile0"] = state["ThreadTile"][0]
@@ -2032,10 +2033,55 @@ class Solution:
 
     return True
 
+
+  @staticmethod
+  def parameterWrapper(state):
+    state["LdsBlockSizePerPadA"] = state["LdsBlockSizePerPad"]
+    state["LdsBlockSizePerPadB"] = state["LdsBlockSizePerPad"]
+
+    state["UnrollMajorLDSA"]     = state["TransposeLDS"]
+    state["UnrollMajorLDSB"]     = state["TransposeLDS"]
+
+    if state["MatrixInstruction"] != [] and len(state["MatrixInstruction"]) == 4:
+      # set EnableMatrixInstruction
+      state["EnableMatrixInstruction"] = True
+
+      # set MIBlock
+      miwg0      = state["MatrixInstruction"][0] if (state["WorkGroup"][0] < state["MatrixInstruction"][0]) else state["WorkGroup"][0]
+      MIBlock_BM = miwg0 // state["MatrixInstruction"][0]
+      MIBlock_BM = min(MIBlock_BM, state["MatrixInstruction"][3])
+      MIBlock_BN = state["MatrixInstruction"][3] // MIBlock_BM
+
+      state["MIBlock"]    = [32, 32, 2, 1, 1, 1]
+      state["MIBlock"][0] = state["MatrixInstruction"][0]
+      state["MIBlock"][1] = state["MatrixInstruction"][1]
+      state["MIBlock"][2] = state["MatrixInstruction"][2]
+      state["MIBlock"][3] = state["MatrixInstruction"][3]
+      state["MIBlock"][4] = MIBlock_BM
+      state["MIBlock"][5] = MIBlock_BN
+
+      # set MIWaveGroup
+      numOfWave                = (state["WorkGroup"][0] * state["WorkGroup"][1]) // globalParameters["WavefrontWidth"]
+      state['MIWaveGroup']     = [1, 1]
+      state['MIWaveGroup'][0]  = min((miwg0 // state["MatrixInstruction"][0]) // MIBlock_BM, numOfWave)
+      state['MIWaveGroup'][1]  = numOfWave // state['MIWaveGroup'][0]
+
+      # set MIWaveTIle
+      state['MIWaveTile']      = [1, 1]
+      state['MIWaveTile'][0]   = state["ThreadTile"][0]
+      state['MIWaveTile'][1]   = state["ThreadTile"][1] // state["MatrixInstruction"][1]
+
+    else:
+      state["EnableMatrixInstruction"] = False
+
+
   ########################################
   # assign all derived parameters
   @staticmethod
   def assignDerivedParameters(state):
+
+    Solution.parameterWrapper(state)
+
     Solution.assignProblemIndependentDerivedParameters(state)
 
     for s in Solution.InternalKeys:
@@ -2061,10 +2107,8 @@ class Solution:
     if "LoopUnroll" in state:
       state["LoopIters"] = state["LoopUnroll"]
 
+
     if state["EnableMatrixInstruction"]:
-      if not (state["ProblemType"]["DataType"].toChar() in validMFMA \
-              and state["MIBlock"] in validMFMA[state["ProblemType"]["DataType"].toChar()]):
-        reject(state, "MIBlock %s not valid for DataType %s" % (state["MIBlock"], state["ProblemType"]["DataType"]))
       if not (state["ProblemType"]["DataType"].isSingle() \
               or state["ProblemType"]["DataType"].isBFloat16() \
               or state["ProblemType"]["DataType"].isHalf()):

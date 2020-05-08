@@ -239,24 +239,11 @@ for i in validMacroTileSides:
     validMacroTiles.append([i, j])
 
 validMFMA = {}
-
-validMFMA["S"] = [[32,32, 2, 1, 1, 1], [32,32, 1, 2, 2, 1], [32,32, 1, 2, 1, 2], \
-                  [16,16, 4, 1, 1, 1], [16,16, 1, 4, 4, 1], [16,16, 1, 4, 2, 2], [16,16, 1, 4, 1, 4], \
-                  [ 4, 4, 1,16,16, 1], [ 4, 4, 1,16, 8, 2], [ 4, 4, 1,16, 4, 4], [ 4, 4, 1,16, 2, 8], [ 4, 4, 1,16, 1,16]]
-
-validMFMA["B"] = [[32,32, 4, 1, 1, 1], [32,32, 2, 2, 2, 1], [32,32, 2, 2, 1, 2], \
-                  [16,16, 8, 1, 1, 1], [16,16, 2, 4, 4, 1], [16,16, 2, 4, 2, 2], [16,16, 2, 4, 1, 4], \
-                  [ 4, 4, 2,16,16, 1], [ 4, 4, 2,16, 8, 2], [ 4, 4, 2,16, 4, 4], [ 4, 4, 2,16, 2, 8], [ 4, 4, 2,16, 1,16]]
-
-validMFMA["H"] = [[32,32, 8, 1, 1, 1], [32,32, 4, 2, 2, 1], [32,32, 4, 2, 1, 2], \
-                  [16,16,16, 1, 1, 1], [16,16, 4, 4, 4, 1], [16,16, 4, 4, 2, 2], [16,16, 4, 4, 1, 4], \
-                  [ 4, 4, 4,16,16, 1], [ 4, 4, 4,16, 8, 2], [ 4, 4, 4,16, 4, 4], [ 4, 4, 4,16, 2, 8], [ 4, 4, 4,16, 1,16]]
-
+validMFMA["H"] = [[32,32,4,2], [32,32,8,1], [16,16,4,4], [16,16,16,1], [4,4,4,16]]
+validMFMA["S"] = [[32,32,1,2], [32,32,2,1], [16,16,1,4], [16,16,4,1], [4,4,1,16]]
+validMFMA["B"] = [[32,32,2,2], [32,32,4,1], [16,16,2,4], [16,16,8,1], [4,4,2,16]]
 validMFMA["4xi8"] = [[32,32,4,2], [32,32,8,1], [16,16,4,4], [16,16,16,1], [4,4,4,16]]
-
-validMIBlocks     = [[], [-1]] + validMFMA["H"] + validMFMA["S"] + validMFMA["B"] + validMFMA["4xi8"]
-validMIWaveGroups = [[], [-1], [1,1], [2,1], [1,2], [1,4], [2,2], [4, 1]]
-validMIWaveTiles  = [[], [-1], [1,1], [2,1], [1,2], [1,4], [2,2], [4, 1]]
+validMatrixInstructions = [[], [-1]] + validMFMA["H"] + validMFMA["S"] + validMFMA["B"] + validMFMA["4xi8"]
 
 validParameters = {
     "LoopDoWhile":                [ False, True ], # Source. True=DoWhile, False=For loop
@@ -610,14 +597,10 @@ validParameters = {
     "ThreadTile":                 validThreadTiles,
     "MacroTile":                  validMacroTiles,      # MT0 = wg0*tt0, MT1 = wg1*tt1
 
-    # MIBlock: (M x N x K x B)
+    # MatrixInstruction: (M x N x K x B)
     # XDLOPS tile definition, only valid for gfx908
     # If empty, do not use these instructions
-    "EnableMatrixInstruction":    [False, True],
-    "MIBlock":                    validMIBlocks,
-    "MIWaveGroup":                validMIWaveGroups,
-    "MIWaveTile":                 validMIWaveTiles,
-
+    "MatrixInstruction":          validMatrixInstructions,
 
     # If positive, each switch includes switches <= the specified switch.
     # For example 3 will enable NoPostLoop+NoGlobalRead+NoLocalWrite
@@ -760,11 +743,10 @@ validParameters = {
     # Padding boundary for LDS. defines block-size for pad insertion. for every 'LdsBlockSizePerPad' bytes, LDS padding (pad value from LdsPad parameter)
     # is added (readOffset aware of the pad and adjusts offset value based on this parameter value).good rule of thumb is LdsBlockSizePerPad >= unrollDepth * BPE
     # optimized value is 128
-    "LdsBlockSizePerPadA":         [-1, 0, 64, 128, 256],
-    "LdsBlockSizePerPadB":         [-1, 0, 64, 128, 256],
+    "LdsBlockSizePerPad":          [-1, 0, 64, 128, 256],
 
-    "UnrollMajorLDSA":             [False, True],
-    "UnrollMajorLDSB":             [False, True],
+    #Transpose LDS format. Local store in Coalsced dimension , same as optimized global fetch dimension . applicable only in TLU=0 case for miSIMD(s)
+    "TransposeLDS":                [-1, 1, 0],
 
     # tinkered with adding extra syncs or waits in the assembly kernels to see if it would improve the sequencing between workgroups, "fully synchronous scheduling" is WAY more promising; this can be deprecated
     "PerformanceSyncLocation":    list(range(-1, 16*16+1)),
@@ -827,10 +809,8 @@ defaultBenchmarkCommonParameters = [
     {"KernelLanguage":            [ "Source" ] },
     {"LdsPadA":                   [ 0 ] },
     {"LdsPadB":                   [ 0 ] },
-    {"LdsBlockSizePerPadA":       [ 0 ] },
-    {"LdsBlockSizePerPadB":       [ 0 ] },
-    {"UnrollMajorLDSA":           [ False ] },
-    {"UnrollMajorLDSB":           [ False ] },
+    {"LdsBlockSizePerPad":        [ 0 ] },
+    {"TransposeLDS":              [ 0 ] },
     {"MaxOccupancy":              [ 40 ] },
     {"VectorWidth":               [ -1 ] },
     {"VectorStore":               [ -1 ] },
@@ -904,10 +884,7 @@ defaultBenchmarkCommonParameters = [
     {"WorkGroupMappingType":      [ "B" ] },
     {"WorkGroupMapping":          [ 8 ] },
     {"ThreadTile":                [ [4,4] ] },
-    {"EnableMatrixInstruction":   [ False ] },
-    {"MIBlock":                   [ [32, 32, 1, 2, 1, 2] ] },
-    {"MIWaveGroup":               [ [1, 1] ] },
-    {"MIWaveTile":                [ [1, 1] ] },
+    {"MatrixInstruction":         [ [] ] },
     {"DisableAtomicFail":         [ 0 ] },
     {"DisableKernelPieces":       [ 0 ] },
     {"DepthU":                    [ -1 ] },
