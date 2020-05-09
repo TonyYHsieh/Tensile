@@ -2265,10 +2265,14 @@ class Solution:
 
     # VectorWidth default handling
     if state["VectorWidth"] < 1:
-      state["VectorWidth"] = int(4 / state["ProblemType"]["DataType"].numRegisters())
-      while state["ThreadTile0"] % state["VectorWidth"] != 0 \
-          or state["ThreadTile1"] % state["VectorWidth"] != 0:
-        state["VectorWidth"] //= 2
+      if state["EnableMatrixInstruction"]:
+        state["VectorWidth"] = 2 if (state["ProblemType"]["DataType"].numRegisters() == 0.5) else 1
+      else:
+        state["VectorWidth"] = int(4 / state["ProblemType"]["DataType"].numRegisters())
+        while state["ThreadTile0"] % state["VectorWidth"] != 0 \
+            or state["ThreadTile1"] % state["VectorWidth"] != 0:
+          state["VectorWidth"] //= 2
+
     # TT0,1 both must be multiples of VW, b/c of rC, rA, rB
     if not state["EnableMatrixInstruction"]:
       if state["ThreadTile0"] % state["VectorWidth"] != 0 \
