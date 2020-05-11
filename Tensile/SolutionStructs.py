@@ -2618,10 +2618,16 @@ class Solution:
         reject(state, "UnrollMajorLDS Supports only in EnableMatrixInstruction=1")
 
     if state["LdsBlockSizePerPadA"] == -1:
-      state["LdsBlockSizePerPadA"] = 256
+      if state["EnableMatrixInstruction"] and state["UnrollMajorLDSA"]:
+        state["LdsBlockSizePerPadA"] = 256
+      else:
+        state["LdsBlockSizePerPadA"] = 0
 
     if state["LdsBlockSizePerPadB"] == -1:
-      state["LdsBlockSizePerPadB"] = 256
+      if state["EnableMatrixInstruction"] and state["UnrollMajorLDSB"]:
+        state["LdsBlockSizePerPadA"] = 256
+      else:
+        state["LdsBlockSizePerPadB"] = 0
 
     if state["LocalReadVectorWidth"] != -1:
       if (state["UnrollMajorLDSA"] == False or state["UnrollMajorLDSB"] == False):
