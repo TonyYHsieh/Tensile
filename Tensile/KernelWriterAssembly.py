@@ -6873,21 +6873,23 @@ class KernelWriterAssembly(KernelWriter):
                   offsetVgpr = self.guardZeroPad(kernel, tP, codeMod, offsetVgpr, soffset, tmpSgpr, addrV, perp, sPerp, para, sPara)
                   kStr += str(codeMod)
 
-
                 if kernel["DirectToLds%s"%tc]:
                   if directToLdsLoads != 0:
-                    ldsInc = kernel["NumThreads"]*4
-                    kStr += inst("s_add_u32", "m0", "m0", ldsInc, \
-                        "Move LDS write address to next line" )
-                  directToLdsLoads+=1
+                    ldsInc = kernel["NumThreads"] * 4
+                    if kernel["LdsBlockSizePerPad"] != 0:
+                      ldsInc += (ldsInc // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
+                    else:
+                      ldsInc += (ldsInc // (kernel["NumThreads"] * 4)) * kernel["LdsPad%s"%tc] * tP["bpe"]
+                    kStr += inst("s_add_u32", "m0", "m0", ldsInc, "Move LDS write address to next line" )
 
-                  # Assembler expects a destination VGPR even though not written
+                  directToLdsLoads+=1
                   destVgpr=0
                 else:
                   destVgpr="G2L%s+%u+%u"%(tc, g2lIdx, regIdx)
 
                 offset = r * tP["bpe"]
                 hi16 = 0
+                comment="load one buffer value"
                 if kernel["ProblemType"]["DataType"].isHalf() or \
                    kernel["ProblemType"]["DataType"].isBFloat16():
                   if numElementsPerLoad==2:
@@ -6897,8 +6899,6 @@ class KernelWriterAssembly(KernelWriter):
                   elif not kernel["DirectToLds%s"%tc]:
                     hi16=loopCnt%2 if tP["glvw"]==1 else r%2
                     comment="load half buffer value"
-                else:
-                  comment="load one buffer value"
 
                 bpl = numElementsPerLoad*self.bpeAB # bytesPerLoad
 
@@ -7031,17 +7031,19 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   def directToLdsM0Update(self, kernel, mode, tP):
     tc = tP["tensorChar"]
-    imod = Code.Module("directToLdsM0Update%s_%u"%(tc,mode))
+    imod        = Code.Module("directToLdsM0Update%s_%u"%(tc,mode))
     DtldsModule = imod.addCode(Code.Module("dtls_offset%s"%tP["tensorChar"]))
-    if not self.do["GlobalRead%s"%tP["tensorChar"]]: return imod
+
+    if not self.do["GlobalRead%s"%tP["tensorChar"]]:
+      return imod
+
     if kernel["DirectToLds%s"%tP["tensorChar"]]:
       # DirectToLds only enabled for TLU=1 cases, where the registers are directly copied into LDS
       # for cases both A&B are DTLS, updating m0 for each GlobalRead requires instruction schedule
       # along with global reads
       assert (kernel["LocalWriteUseSgpr%s"%tc])
       if kernel["ExpandPointerSwap"]:
-        DtldsModule.addInst("s_add_u32", "m0", sgpr("LocalWriteAddr%s"%tc), \
-                      tP["localWriteSwapByteOffset"], "m0 <- LDS write address")
+        DtldsModule.addInst("s_add_u32", "m0", sgpr("LocalWriteAddr%s"%tc), tP["localWriteSwapByteOffset"], "m0 <- LDS write address")
       else:
         DtldsModule.addInst("s_mov_b32", "m0", sgpr("LocalWriteAddr%s"%tc), "m0 <- LDS write address")
 
@@ -7155,7 +7157,6 @@ class KernelWriterAssembly(KernelWriter):
                 loadModule.addCode(codeMod)
 
               if kernel["DirectToLds%s"%tc]:
-
                 # Get offset (for checking, see comment below) and comment:
                 (checkOffset, iDummy, comment) = \
                     self.calculateLdsWriteOffset(perp, para, sPerp, sPara, kernel, tP, 0)
@@ -7164,18 +7165,15 @@ class KernelWriterAssembly(KernelWriter):
                 # Therefore we double-check here to ensure the desired LDS write offset
                 # is moving at NumThreads*4.  This should already be guaranteed since
                 # we only use direct-to-lds for non-transpose cases but double-check here.
-                ldsInc = kernel["NumThreads"]*4
-                #print ("checkOffset=", checkOffset, "ldsOffset=", ldsOffset, "ldsInc=", ldsInc)
-
 
                 if directToLdsLoads != 0:
-                  LdsPad = kernel["LdsPad%s"%tc] if kernel["LdsBlockSizePerPad%s"%tc] == 0 else 0
-                  if not kernel["UseInstOffsetForGRO"]:
-                    ldsOffset = ldsInc + (ldsInc//256) * LdsPad * tP["bpe"]
-                    loadModule.addInst("s_add_u32", "m0", "m0", hex(ldsOffset), \
-                      "Move LDS write address to next line" )
+                  ldsInc = kernel["NumThreads"] * 4
+                  if kernel["LdsBlockSizePerPad"] != 0:
+                    ldsInc += (ldsInc // kernel["LdsBlockSizePerPad"]) * kernel["LdsPad%s"%tc] * tP["bpe"]
                   else:
-                    instOffset += ldsInc + (ldsInc//256) * LdsPad * tP["bpe"]
+                    ldsInc += (ldsInc // (kernel["NumThreads"] * 4)) * kernel["LdsPad%s"%tc] * tP["bpe"]
+                  loadModule.addInst("s_add_u32", "m0", "m0", ldsInc, "Move LDS write address to next line" )
+
                 directToLdsLoads+=1
                 #ldsOffset += ldsInc
                 destVgpr=0
