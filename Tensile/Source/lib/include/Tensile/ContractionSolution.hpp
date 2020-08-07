@@ -205,7 +205,7 @@ namespace Tensile
 
             bool sourceKernel = false;
 
-            bool   globalAccumulation    = false;
+            int    globalAccumulation    = 0;
             size_t workspaceSizePerElemC = 0;
         };
 
