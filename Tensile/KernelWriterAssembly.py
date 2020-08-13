@@ -8568,11 +8568,11 @@ class KernelWriterAssembly(KernelWriter):
     """
     kStr = ""
 
-    bps = kernel["ProblemType"]["DataType"].numBytes() * ss.cfg.gwvw
-    rpv = kernel["ProblemType"]["DataType"].numRegisters() * ss.cfg.gwvw
+    bps = self.bpeDexternal * ss.cfg.gwvw
+    rpv = self.bpeDexternal * ss.cfg.gwvw / self.bpr
 
     addr0 = vgpr(self.storeRemapLW)
-    offset =  addrCalc.coordOffset0 * self.bpeCexternal
+    offset =  addrCalc.coordOffset0 * self.bpeDexternal
 
     if bps==2:
       kStr += inst("ds_write_b16", addr0, vgpr(sumIdx, rpv*2), \
@@ -8607,10 +8607,11 @@ class KernelWriterAssembly(KernelWriter):
 
     gwvw = kernel["StoreRemapVectorWidth"]
     nElements = kernel["MacroTile0"]*kernel["MatrixInstN"]//kernel["MIWaveGroup"][0]//globalParameters["WavefrontWidth"]
-    bpe = kernel["ProblemType"]["DataType"].numBytes()
-    bps = kernel["ProblemType"]["DataType"].numBytes() * gwvw
-    rpe = kernel["ProblemType"]["DataType"].numRegisters()
-    rpv = kernel["ProblemType"]["DataType"].numRegisters() * gwvw
+
+    bpe = self.bpeDexternal
+    bps = bpe * gwvw
+    rpe = self.bpeDexternal / self.bpr
+    rpv = rpe * gwvw
 
     # num registers to check out
     storeRegs = []
@@ -8772,7 +8773,7 @@ class KernelWriterAssembly(KernelWriter):
       vgpr(storeRemapLW), \
       vgpr(tmpV0), \
       vgpr(coord0), \
-      hex(log2(self.bpeCexternal)), \
+      hex(log2(self.bpeDexternal)), \
       "local write C address")
 
     kStr += "\n"
@@ -8806,7 +8807,7 @@ class KernelWriterAssembly(KernelWriter):
       vgpr(storeRemapLR), \
       vgpr(tmpV0), \
       vgpr(coord0), \
-      hex(log2(self.bpeCexternal)), \
+      hex(log2(self.bpeDexternal)), \
       "local read C address")
     kStr += "\n"
 

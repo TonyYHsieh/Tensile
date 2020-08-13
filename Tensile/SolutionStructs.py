@@ -2879,9 +2879,9 @@ class Solution:
       if state["PersistentKernel"]:
         reject(state, "storeRemap doesn't support persist kernel yet")
         return
-      if state["GlobalSplitU"] > 1:
-        reject(state, "storeRemap doesn't support GlobalSplitU yet")
-        return
+#      if state["GlobalSplitU"] > 1:
+#        reject(state, "storeRemap doesn't support GlobalSplitU yet")
+#        return
       if packedC0 or packedC1:
         reject(state, "storeRemap doesn't support packedC0 and packedC1 yet")
         return
@@ -2918,6 +2918,7 @@ class Solution:
         return
       ldsRemapPad = max(state["StoreRemapVectorWidth"],state["MIOutputVectorWidth"])
       ldsNumElementsRemapC = (state["MacroTile0"]+ldsRemapPad)* state["MatrixInstN"] * state["MIWaveGroup"][1]
+      ldsNumElementsRemapC *= 2
       #print("ldsNumElementsRemapC=%u" % ldsNumElementsRemapC)
       ldsNumElements = max(ldsNumElements, ldsNumElementsRemapC)
 

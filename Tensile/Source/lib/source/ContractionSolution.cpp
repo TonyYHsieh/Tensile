@@ -736,7 +736,7 @@ namespace Tensile
 
         std::vector<KernelInvocation> rv;
 
-        if(sizeMapping.globalSplitU > 1 && sizeMapping.globalAccumulation != 2)
+        if(sizeMapping.globalSplitU > 1)
         {
             if(debug)
                 rv.push_back(generateBetaOnlyCall<TypedInputs, true>(problem, inputs, hardware));
