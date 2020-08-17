@@ -2879,7 +2879,7 @@ class Solution:
       if state["PersistentKernel"]:
         reject(state, "storeRemap doesn't support persist kernel yet")
         return
-      if state["GlobalSplitU"] > 1:
+      if (state["GlobalSplitU"] > 1) and (state["_GlobalAccumulation"] != 2):
         reject(state, "storeRemap doesn't support GlobalSplitU yet")
         return
       if packedC0 or packedC1:
@@ -2904,6 +2904,8 @@ class Solution:
         srMaxVw = 4
       elif state["ProblemType"]["DataType"].isHalf() or state["ProblemType"]["DataType"].isBFloat16():
         srMinVw = 2
+        if state["_GlobalAccumulation"]:
+          srMaxVw = 4
       if srMinVw > state["StoreRemapVectorWidth"] or srMaxVw < state["StoreRemapVectorWidth"]:
         reject(state, "StoreRemapVectorWidth %u is not allowed for this data type" % state["StoreRemapVectorWidth"])
         return
@@ -2918,6 +2920,7 @@ class Solution:
         return
       ldsRemapPad = max(state["StoreRemapVectorWidth"],state["MIOutputVectorWidth"])
       ldsNumElementsRemapC = (state["MacroTile0"]+ldsRemapPad)* state["MatrixInstN"] * state["MIWaveGroup"][1]
+      ldsNumElementsRemapC *= (2 if state["_GlobalAccumulation"] else 1) # FP32 output FP16 Data
       #print("ldsNumElementsRemapC=%u" % ldsNumElementsRemapC)
       ldsNumElements = max(ldsNumElements, ldsNumElementsRemapC)
 
