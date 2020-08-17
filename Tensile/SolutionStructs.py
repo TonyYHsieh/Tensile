@@ -1704,6 +1704,7 @@ class Solution:
       state = {}
       state["ProblemType"] = deepcopy(self["ProblemType"])
       state["KernelLanguage"] = "Source"
+      state["_GlobalAccumulation"] = self["_GlobalAccumulation"]
       self.conversionKernelObjects.append(KernelWriterConversion(state))
 
 
@@ -2207,12 +2208,19 @@ class Solution:
         #del state[s]
 
     dataType = state["ProblemType"]["DataType"]
-    state["_GlobalAccumulation"] = (dataType.isBFloat16() or dataType.isHalf()) \
-                                 and state["ProblemType"]["HighPrecisionAccumulate"] \
-                                 and state["GlobalSplitU"] > 1 \
-                                 and state["EnableMatrixInstruction"]
+    state["_GlobalAccumulation"] = 0
+    if ((dataType.isBFloat16() or dataType.isHalf())
+      and state["ProblemType"]["HighPrecisionAccumulate"] \
+      and state["GlobalSplitU"] > 1 \
+      and state["EnableMatrixInstruction"]):
+      state["_GlobalAccumulation"] = state["GlobalSplitUAlogrithm"]
 
-    state["_WorkspaceSizePerElemC"] = 4 if state["_GlobalAccumulation"] else 0
+    if state["_GlobalAccumulation"] == 1:
+      state["_WorkspaceSizePerElemC"] = 4
+    elif state["_GlobalAccumulation"] == 2:
+      state["_WorkspaceSizePerElemC"] = 4 * state["GlobalSplitU"]
+    else:
+      state["_WorkspaceSizePerElemC"] = 0
 
     if state["VectorStore"] == -1:
         state["_VectorStore"] = 1 # default, may be changed if needed to generate a valid kernel

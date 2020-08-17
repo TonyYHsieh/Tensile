@@ -2707,7 +2707,7 @@ void initData(DestDataType**   initialD,
     tensileStatusCheck(status);
     std::cout << ".";
     deviceWS = clCreateBuffer(
-        context, CL_MEM_READ_WRITE, maxSizeC * bytesPerElement[dataTypeIdx] * 2, NULL, &status);
+        context, CL_MEM_READ_WRITE, maxSizeW * 4, NULL, &status);
     tensileStatusCheck(status);
 #else
     status = hipMalloc(&deviceC, maxSizeC * bytesPerElement[dataTypeIdx]);
@@ -2727,7 +2727,7 @@ void initData(DestDataType**   initialD,
     status = hipMalloc(&deviceB, maxSizeB * bytesPerElement[dataTypeIdx]);
     tensileStatusCheck(status);
     std::cout << ".";
-    status = hipMalloc(&deviceWS, maxSizeC * bytesPerElement[dataTypeIdx] * 2);
+    status = hipMalloc(&deviceWS, maxSizeW * 4);
     tensileStatusCheck(status);
 
 #endif
@@ -3153,6 +3153,7 @@ void parseCommandLineParameters(int argc, char* argv[])
         maxSizeC *= userSizes[i];
     }
     maxSizeD = maxSizeC;
+    maxSizeW = 0;
 
     maxSizeA = 1;
     maxSizeB = 1;
