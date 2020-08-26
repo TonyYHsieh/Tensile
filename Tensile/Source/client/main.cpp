@@ -150,6 +150,7 @@ namespace Tensile
                 ("num-enqueues-per-sync",    po::value<int>()->default_value(1), "Enqueues per sync")
                 ("num-syncs-per-benchmark",  po::value<int>()->default_value(1), "Syncs per benchmark")
                 ("use-gpu-timer",            po::value<bool>()->default_value(true), "Use GPU timer")
+                ("use-gpu-precise-timer",    po::value<bool>()->default_value(true), "Use Precise timer when using GPU timer")
                 ("sleep-percent",            po::value<int>()->default_value(0), "Sleep percentage")
                 ("hardware-monitor",         po::value<bool>()->default_value(true), "Use hardware monitor.")
 

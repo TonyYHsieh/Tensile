@@ -49,6 +49,7 @@ namespace Tensile
             , m_hardware(hardware)
             , m_numEnqueuesPerSolution(m_numEnqueuesPerSync * m_numSyncsPerBenchmark)
             , m_useGPUTimer(args["use-gpu-timer"].as<bool>())
+            , m_useGPUPreciseTimer(args["use-gpu-precise-timer"].as<bool>())
             , m_sleepPercent(args["sleep-percent"].as<int>())
             , m_timeInSolution(0)
             , m_totalGPUTime(0)
@@ -194,14 +195,28 @@ namespace Tensile
             if(m_useGPUTimer)
             {
                 HIP_CHECK_EXC(hipEventSynchronize(stopEvents->back().back()));
-                for(size_t i = 0; i < startEvents->size(); i++)
+                if(m_useGPUPreciseTimer)
                 {
-                    float enqTime = 0.0f;
-
-                    HIP_CHECK_EXC(hipEventElapsedTime(
-                        &enqTime, startEvents->at(i).front(), stopEvents->at(i).back()));
-
-                    totalTime += double_millis(enqTime);
+                    for(size_t i = 0; i < startEvents->size(); i++)
+                    {
+                        float enqTime = 0.0f;
+                        HIP_CHECK_EXC(hipEventElapsedTime(
+                            &enqTime, startEvents->at(i).front(), stopEvents->at(i).back()));
+                        totalTime += double_millis(enqTime);
+                    }
+                }
+                else
+                {
+                    for(size_t i = 0; i < startEvents->size(); i++)
+                    {
+                        for(size_t j = 0; j < startEvents->at(i).size(); j++)
+                        {
+                            float enqTime = 0.0f;
+                            HIP_CHECK_EXC(hipEventElapsedTime(
+                                &enqTime, startEvents->at(i)[j], stopEvents->at(i)[j]));
+                            totalTime += double_millis(enqTime);
+                        }
+                    }
                 }
             }
             else

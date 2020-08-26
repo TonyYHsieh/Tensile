@@ -649,6 +649,7 @@ def writeClientConfig(forBenchmark, solutions, problemSizes, stepName, stepBaseD
         param("csv-export-extra-cols",    globalParameters["CSVExportWinner"])
         param("csv-merge-same-problems",  globalParameters["CSVMergeSameProblemID"])
         param("log-level",                ClientLogLevel(globalParameters["ClientLogLevel"]).name)
+        param("use-gpu-precise-timer",    globalParameters["PreciseKernelTime"])
 
 
 

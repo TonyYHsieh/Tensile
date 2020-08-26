@@ -94,6 +94,7 @@ namespace Tensile
             const int m_numEnqueuesPerSolution;
 
             const bool m_useGPUTimer;
+            const bool m_useGPUPreciseTimer;
             const int  m_sleepPercent;
 
             int m_numBenchmarksRun = 0;
