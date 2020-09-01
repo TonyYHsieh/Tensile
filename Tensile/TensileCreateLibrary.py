@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright 2016-2020 Advanced Micro Devices, Inc. All rights reserved.
+# Copyright 2016-2021 Advanced Micro Devices, Inc. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -301,18 +301,32 @@ def prepAsmNewClient(kernelWriterAssembly):
     assemblerFile.write("copy %1.o %1.co\n")
   else:
     assemblerFile.write("#!/bin/sh {log}\n".format(log = "-x" if globalParameters["PrintLevel"] >=2  else ""))
-    assemblerFile.write("# usage: asm-new.sh kernelName(no extension)\n")
+    assemblerFile.write("# usage: asm-new.sh kernelName(no extension) [--wave32]\n")
 
     assemblerFile.write("f=$1\n")
     assemblerFile.write("shift\n")
+    assemblerFile.write('if [ ! -z "$1" ] && [ "$1" = "--wave32" ]; then\n')
+    assemblerFile.write("    wave=32\n")
+    assemblerFile.write("    shift\n")
+    assemblerFile.write("else\n")
+    assemblerFile.write("    wave=64\n")
+    assemblerFile.write("fi\n")
+
 
     isa = globalParameters["CurrentISA"]
     assemblerFile.write("h={gfxName}\n".format(gfxName = Common.gfxName(isa)))
 
-    cArgs = kernelWriterAssembly.getCompileArgs("$f.s", "$f.o", useGlobalISA=True)
+    cArgs32 = kernelWriterAssembly.getCompileArgs("$f.s", "$f.o", isa=isa, wavefrontSize=32)
+    cArgs64 = kernelWriterAssembly.getCompileArgs("$f.s", "$f.o", isa=isa, wavefrontSize=64)
     lArgs = kernelWriterAssembly.getLinkCodeObjectArgs(["$f.o"], "$f.co")
 
-    assemblerFile.write(" ".join(cArgs) + "\n")
+    assemblerFile.write("if [ $wave -eq 32 ]; then\n")
+    assemblerFile.write(" ".join(cArgs32) + "\n")
+    assemblerFile.write("else\n")
+    assemblerFile.write(" ".join(cArgs64) + "\n")
+    assemblerFile.write("fi\n")
+
+
     assemblerFile.write(" ".join(lArgs) + "\n")
 
     assemblerFile.write("cp $f.co ../../../library/${f}_$h.co\n")
@@ -1346,7 +1360,8 @@ def TensileCreateLibrary():
   argParser.add_argument("--cxx-compiler",           dest="CxxCompiler",       choices=["hcc", "hipcc"],       action="store", default="hipcc")
   argParser.add_argument("--cmake-cxx-compiler",     dest="CmakeCxxCompiler",  action="store")
   argParser.add_argument("--code-object-version",    dest="CodeObjectVersion", choices=["V2", "V3"], action="store", default="V3")
-  argParser.add_argument("--architecture",           dest="Architecture",      choices=["all", "gfx000", "gfx803", "gfx900", "gfx906:xnack-", "gfx908:xnack-"], action="store", default="all")
+  argParser.add_argument("--architecture",           dest="Architecture",
+      choices=["all", "gfx000", "gfx803", "gfx900", "gfx906:xnack-", "gfx908:xnack-", "gfx1010", "gfx1011", "gfx1012", "gfx1030"], action="store", default="all")
   argParser.add_argument("--merge-files",            dest="MergeFiles",        action="store_true")
   argParser.add_argument("--no-merge-files",         dest="MergeFiles",        action="store_false")
   argParser.add_argument("--short-file-names",       dest="ShortNames",        action="store_true")
@@ -1430,7 +1445,8 @@ def TensileCreateLibrary():
 
   # Translate GPU targets to filter filenames in Tensile_LOGIC directory
   mapArchitecture = {'all':'_','gfx000':'none', 'gfx803':'r9nano',
-        'gfx900':'vega10', 'gfx906:xnack-':'vega20', 'gfx908:xnack-':'arcturus'}
+        'gfx900':'vega10', 'gfx906:xnack-':'vega20', 'gfx908:xnack-':'arcturus',
+        'gfx1010':'navi10', 'gfx1011':'navi11', 'gfx1012':'navi12', 'gfx1030':'xxxxxx'}
 
   for key in mapArchitecture:
     if arguments["Architecture"] == key:
