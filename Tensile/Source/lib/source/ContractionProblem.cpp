@@ -1262,9 +1262,9 @@ namespace Tensile
         , batchB(_batchB)
         , batchC(_batchC)
         , batchD(_batchD)
+        , ws(_ws)
         , alpha(_alpha)
         , beta(_beta)
-        , ws(_ws)
     {
     }
 
