@@ -679,21 +679,21 @@ namespace Tensile
 
         std::vector<KernelInvocation> rv;
 
-        if(sizeMapping.globalSplitU > 1)
-            if(sizeMapping.globalAccumulation)
-                rv.reserve(3);
-            else
-                rv.reserve(2);
-        else
-            rv.reserve(1);
-
-        if(sizeMapping.globalSplitU > 1)
-        {
-            if(debug)
-                rv.push_back(generateBetaOnlyCall<TypedInputs, true>(problem, inputs, hardware));
-            else
-                rv.push_back(generateBetaOnlyCall<TypedInputs, false>(problem, inputs, hardware));
-        }
+        //        if(sizeMapping.globalSplitU > 1)
+        //            if(sizeMapping.globalAccumulation)
+        //                rv.reserve(3);
+        //            else
+        //                rv.reserve(2);
+        //        else
+        //            rv.reserve(1);
+        //
+        //        if(sizeMapping.globalSplitU > 1)
+        //        {
+        //            if(debug)
+        //                rv.push_back(generateBetaOnlyCall<TypedInputs, true>(problem, inputs, hardware));
+        //            else
+        //                rv.push_back(generateBetaOnlyCall<TypedInputs, false>(problem, inputs, hardware));
+        //        }
 
         if(debug)
             rv.push_back(generateSingleCall<TypedInputs, true>(problem, inputs, hardware));

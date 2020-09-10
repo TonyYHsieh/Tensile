@@ -1,0 +1,85 @@
+GlobalParameters:
+  EnqueuesPerSync: 20
+  NumBenchmarks: 2
+  SyncsPerBenchmark: 1
+  LibraryPrintDebug: False
+  NumElementsToValidate: 0
+  MergeFiles: True
+  KernelTime: True
+  DataInitTypeAlpha: 1
+  DataInitTypeBeta: 0
+  NewClient: 2
+  PrintSolutionRejectionReason: True
+#  CMakeBuildType: Debug
+
+BenchmarkProblems:
+  ########################################
+  # NT - standard
+  ########################################
+  -
+    - # ProblemType
+      OperationType: GEMM
+      DataType: h
+#      DestDataType: B
+#      ComputeDataType: s
+      HighPrecisionAccumulate: True
+      TransposeA: False
+      TransposeB: True
+      UseBeta: False
+      Batched: True
+
+    - # BenchmarkProblemSizeGroup - Standard
+      InitialSolutionParameters:
+      BenchmarkCommonParameters:
+        - KernelLanguage: ["Assembly"]
+        - EdgeType: ["ShiftPtr"]
+      ForkParameters:
+        - MatrixInstruction:
+#          - [32, 32, 4, 2]
+          - [32, 32, 8, 1]
+        - ThreadTile:
+#          - [ 1, 32 ]
+          - [ 2, 64 ]
+#          - [ 2, 32 ]
+#          - [ 1, 64 ]
+        - WorkGroup:
+#          - [ 32, 2, 1 ]
+#          - [ 32, 8, 1 ]
+          - [ 64, 4, 1 ]
+#          - [128, 2, 1 ]
+        - AssertSummationElementMultiple: [1]
+        - AssertFree0ElementMultiple: [1]
+        - AssertFree1ElementMultiple: [1]
+        - PrefetchGlobalRead: [1]
+        - PrefetchLocalRead: [1]
+        - DepthU: [32]
+        - VectorWidth: [2]
+        - GlobalReadVectorWidth: [2]
+        - SuppressNoLoadLoop: [0]
+        - OptNoLoadLoop: [1]
+        - ScheduleLocalWrite: [1]
+        - ScheduleGlobalRead: [1]
+        - ScheduleIterAlg: [3]
+        - InnerUnroll: [1]
+        - ExpandPointerSwap: [1]
+        - StoreRemapVectorWidth: [0]
+        - WaveSeparateGlobalReadA: [1]
+        - WaveSeparateGlobalReadB: [1]
+        - StaggerUMapping: [0]
+        - WorkGroupMapping: [120]
+#        - GlobalSplitUAlgorithm: [1]
+        - GlobalSplitU: [2]
+      JoinParameters:
+      BenchmarkJoinParameters:
+      BenchmarkFinalParameters:
+        - ProblemSizes:
+#          - Exact: [ 32, 32, 1, 32]
+#          - Range: [[32, 7, 64], [32, 7, 64], [1,2,3], [4096,7,4128]]
+#          - Exact: [ 141, 141, 1, 1037, 1056, 1056, 1056, 1056]
+          - Exact: [ 2048, 2048, 1, 8192]
+#          - Range: [[64, 31, 128], [64, 31, 128], [1,2,3], [4096,31,4224]]
+
+LibraryLogic:
+    ScheduleName: "arcturus"
+    DeviceNames: ["Device 7380", "Device 7388", "Device 738c", "Device 7390"]
+    ArchitectureName: "gfx908"
