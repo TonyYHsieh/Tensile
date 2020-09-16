@@ -202,6 +202,19 @@ namespace Tensile
                         &enqTime, startEvents->at(i).front(), stopEvents->at(i).back()));
 
                     totalTime += double_millis(enqTime);
+                    std::cout << "Tony measure by whole solution " << enqTime << "ms" << std::endl;
+
+                    // measure by kernels
+                    enqTime = 0.0f;
+                    for(size_t j = 0; j < startEvents->at(i).size(); j++)
+                    {
+                        float time = 0.0f;
+                        HIP_CHECK_EXC(hipEventElapsedTime(
+                            &time, startEvents->at(i)[j], stopEvents->at(i)[j]));
+                        enqTime += time;
+                    }
+                    std::cout << "Tony measure by kernels of solution " << enqTime << "ms"
+                              << std::endl;
                 }
             }
             else
