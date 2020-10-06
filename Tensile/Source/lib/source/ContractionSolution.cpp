@@ -265,8 +265,7 @@ namespace Tensile
 
         rv.kernelName = kernelName;
 
-        rv.workGroupSize.x = sizeMapping.workGroupSize.x * sizeMapping.workGroupSize.y
-                             * sizeMapping.workGroupSize.z;
+        rv.workGroupSize.x = sizeMapping.workGroupSize.x * sizeMapping.workGroupSize.y * sizeMapping.workGroupSize.z;
         rv.workGroupSize.y = 1;
         rv.workGroupSize.z = 1;
 

@@ -1071,11 +1071,17 @@ namespace Tensile
 
     template <typename A, typename B, typename C, typename D, typename Alpha, typename Beta>
     TypedContractionInputs<A, B, C, D, Alpha, Beta>::TypedContractionInputs(
-        A const* _a, B const* _b, C const* _c, D* _d, Alpha _alpha, Beta _beta, void* _ws)
+        A const* _a, B const* _b, C const* _c, D* _d,
+        A* const* _batchA, B* const* _batchB, C* const* _batchC, D** _batchD,
+        Alpha _alpha, Beta _beta, void* _ws)
         : a(_a)
         , b(_b)
         , c(_c)
         , d(_d)
+        , batchA(_batchA)
+        , batchB(_batchB)
+        , batchC(_batchC)
+        , batchD(_batchD)
         , alpha(_alpha)
         , beta(_beta)
         , ws(_ws)

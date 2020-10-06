@@ -46,6 +46,7 @@ namespace Tensile
             , m_dType(DataType::Float)
             , m_alphaType(DataType::Float)
             , m_betaType(DataType::Float)
+            , m_stridedBatched(args["strided-batched"].as<bool>())
             , m_highPrecisionAccumulate(args["high-precision-accumulate"].as<bool>())
             , m_kernelLanguage(args["kernel-language"].as<Tensile::KernelLanguage>())
             , m_deterministicMode(args["deterministic-mode"].as<bool>())
@@ -174,6 +175,7 @@ namespace Tensile
                                                          static_cast<int64_t>(zp[zi + 3])}));
                     }
                 }
+                rv.back().setStridedBatched(m_stridedBatched);
                 rv.back().setHighPrecisionAccumulate(m_highPrecisionAccumulate);
                 rv.back().setKernelLanguage(m_kernelLanguage);
                 rv.back().setDeterministicMode(m_deterministicMode);

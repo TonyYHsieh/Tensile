@@ -986,6 +986,32 @@ namespace Tensile
                 }
             };
 
+            struct StridedBatchedEqual
+                : public Predicate_CRTP<StridedBatchedEqual, ContractionProblem>
+            {
+                enum
+                {
+                    HasIndex = false,
+                    HasValue = true
+                };
+                bool value;
+
+                StridedBatchedEqual() = default;
+                StridedBatchedEqual(bool value)
+                    : value(value)
+                {
+                }
+
+                static std::string Type()
+                {
+                    return "StridedBatched";
+                }
+
+                virtual bool operator()(ContractionProblem const& problem) const override
+                {
+                    return problem.stridedBatched() == value;
+                }
+            };
         } // namespace Contraction
 
         /**

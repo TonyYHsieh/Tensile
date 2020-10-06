@@ -1137,6 +1137,7 @@ defaultProblemType = {
     "TransposeA":               False,            # =True means transA="T" or "C", =False means transA = "N"
     "TransposeB":               True,
     "Batched":                  False,            # add batching dimension
+    "StridedBatched":           True,             # use to select general batch or strided batch
 
     # for OperationType == TensorContraction
     # - Indices < NumIndicesC are Free or Batch indices and appear in C and D
