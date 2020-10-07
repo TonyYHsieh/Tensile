@@ -1059,6 +1059,8 @@ class ProblemType(collections.abc.Mapping):
 
     # precision and other
     name += "_"
+    name += "SB" if self["StridedBatched"] else "GB"
+    name += "_"
     name += self["DataType"].toChar()
     if self["UseBeta"]: name += "B"
     if self["HighPrecisionAccumulate"] and not self["SilentHighPrecisionAccumulate"]: name += "H"

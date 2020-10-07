@@ -350,13 +350,27 @@ namespace Tensile
             rv.args.append<void const*>("ws", inputs.ws);
             rv.args.append<void const*>("ws", inputs.ws);
         }
-        else
+        else if (problemType.stridedBatched)
         {
             rv.args.append<typename TypedInputs::DType const*>("d", inputs.d);
             rv.args.append<typename TypedInputs::CType const*>("c", inputs.c);
         }
-        rv.args.append<typename TypedInputs::AType const*>("a", inputs.a);
-        rv.args.append<typename TypedInputs::BType const*>("b", inputs.b);
+        else
+        {
+            rv.args.append<typename TypedInputs::DType* const*>("batchD", inputs.batchD);
+            rv.args.append<typename TypedInputs::CType* const*>("batchC", inputs.batchC);
+        }
+
+        if (problemType.stridedBatched)
+        {
+            rv.args.append<typename TypedInputs::AType const*>("a", inputs.a);
+            rv.args.append<typename TypedInputs::BType const*>("b", inputs.b);
+        }
+        else
+        {
+            rv.args.append<typename TypedInputs::AType* const*>("batchA", inputs.batchA);
+            rv.args.append<typename TypedInputs::BType* const*>("batchB", inputs.batchB);
+        }
 
         rv.args.append<typename TypedInputs::AlphaType>("alpha", inputs.alpha);
         if(std::is_same<typename TypedInputs::AlphaType, Half>::value && !isSourceKernel())
