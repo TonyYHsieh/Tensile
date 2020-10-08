@@ -1058,8 +1058,8 @@ class ProblemType(collections.abc.Mapping):
       name += "C"
 
     # precision and other
-    name += "_"
-    name += "SB" if self["StridedBatched"] else "GB"
+    # name += "_SB" if self["StridedBatched"] else "_GB"
+    name += "" if self["StridedBatched"] else "_GB" # legacy
     name += "_"
     name += self["DataType"].toChar()
     if self["UseBeta"]: name += "B"
