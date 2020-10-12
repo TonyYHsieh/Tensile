@@ -357,8 +357,8 @@ namespace Tensile
         }
         else
         {
-            rv.args.append<typename TypedInputs::DType* const*>("batchD", inputs.batchD);
-            rv.args.append<typename TypedInputs::CType* const*>("batchC", inputs.batchC);
+            rv.args.append<typename TypedInputs::DType const* const*>("batchD", inputs.batchD);
+            rv.args.append<typename TypedInputs::CType const* const*>("batchC", inputs.batchC);
         }
 
         if (problemType.stridedBatched)
@@ -368,8 +368,8 @@ namespace Tensile
         }
         else
         {
-            rv.args.append<typename TypedInputs::AType* const*>("batchA", inputs.batchA);
-            rv.args.append<typename TypedInputs::BType* const*>("batchB", inputs.batchB);
+            rv.args.append<typename TypedInputs::AType const* const*>("batchA", inputs.batchA);
+            rv.args.append<typename TypedInputs::BType const* const*>("batchB", inputs.batchB);
         }
 
         rv.args.append<typename TypedInputs::AlphaType>("alpha", inputs.alpha);
@@ -764,7 +764,8 @@ namespace Tensile
 
         // Check for nullptrs if alpha is non-zero.
         if((inputs.alpha != static_cast<typename TypedInputs::AlphaType>(0) /*&& k!=0*/)
-           && (inputs.a == nullptr || inputs.b == nullptr))
+           && ((problem.stridedBatched() && (inputs.a == nullptr || inputs.b == nullptr))
+               || (!problem.stridedBatched() && (inputs.batchA == nullptr || inputs.batchB == nullptr))))
         {
             std::string matrixID = inputs.a == nullptr ? "A" : "B";
             std::string msg      = std::string("Unsupported nullptr for ") + matrixID

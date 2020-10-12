@@ -661,10 +661,10 @@ namespace Tensile
         C  const* c      = nullptr;
         D       * d      = nullptr;
 
-        A* const* batchA = nullptr;
-        B* const* batchB = nullptr;
-        C* const* batchC = nullptr;
-        D*      * batchD = nullptr;
+        A const* const* batchA = nullptr;
+        B const* const* batchB = nullptr;
+        C const* const* batchC = nullptr;
+        D*            * batchD = nullptr;
 
         void*     ws     = nullptr;
 
