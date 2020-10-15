@@ -8696,6 +8696,8 @@ class KernelWriterAssembly(KernelWriter):
 
     # coord 1 : offset part
     kStr += inst("v_mul_lo_u32", vgpr(self.cinRowPtr), vgpr(tid1), sgpr("StridesC"), " offset 1")
+    if not kernel["LdcEqualsLdd"]:
+      kStr += inst("v_mul_lo_u32", vgpr(self.coutRowPtr), vgpr(tid1), sgpr("StridesD"), " offset 1")
 
     # coord 0 : wave part
     kStr += vectorStaticRemainder(dummy, tmpVgpr0, wave_id, kernel["MIWaveGroup"][0], tmpVgpr1, tmpSgpr)
@@ -9971,6 +9973,9 @@ class KernelWriterAssembly(KernelWriter):
         if (d1 == vc1 == d0 == vc0 == 0) or self.newCoord1:
           packedC1 = kernel["PackedC1IndicesX"]
           strideC1 = "StrideC%s" % (kw.indexChars[packedC1[0]])
+          if not kernel["LdcEqualsLdd"]:
+            strideD1 = "StrideD%s" % (kw.indexChars[packedC1[0]])
+
           kStr += kw.comment("shift vector components d1")
           vw = kernel["GlobalLoadVectorWidthB"]
           vTmp1 = tmpVgpr01
@@ -9990,10 +9995,13 @@ class KernelWriterAssembly(KernelWriter):
           kStr += inst("v_sub_i32", vgpr(vTmp2), vgpr(vTmp1), vgpr(self.coord1Vgpr), "shift how many column")
           kStr += inst("v_cndmask_b32", vgpr(self.coord1Vgpr), vgpr(self.coord1Vgpr), vgpr(vTmp1), \
                         sgpr(sTmp1,2), "set new coord1 if meet conditions" )
-          kStr += inst("v_mad_i32_i24", vgpr(vTmp1), sgpr(strideC1), vgpr(vTmp2), vgpr(kw.cinRowPtr), \
-                      "new rowStart address += shift column * StridesC")
-          kStr += inst("v_cndmask_b32", vgpr(kw.cinRowPtr), vgpr(kw.cinRowPtr), vgpr(vTmp1), \
-                        sgpr(sTmp1,2), "set new rowStart if meet conditions" )
+
+          kStr += inst("v_mad_i32_i24", vgpr(vTmp1), sgpr(strideC1), vgpr(vTmp2), vgpr(kw.cinRowPtr), "new rowStart address += shift column * StridesC")
+          kStr += inst("v_cndmask_b32", vgpr(kw.cinRowPtr), vgpr(kw.cinRowPtr), vgpr(vTmp1), sgpr(sTmp1,2), "set new rowStart if meet conditions" )
+          if not kernel["LdcEqualsLdd"]:
+            kStr += inst("v_mad_i32_i24", vgpr(vTmp1), sgpr(strideD1), vgpr(vTmp2), vgpr(kw.coutRowPtr), "new rowStart address += shift column * StridesD")
+            kStr += inst("v_cndmask_b32", vgpr(kw.coutRowPtr), vgpr(kw.coutRowPtr), vgpr(vTmp1), sgpr(sTmp1,2), "set new rowStart if meet conditions" )
+
           if kernel["StoreRemapVectorWidth"]:
             ldsPad = max(kernel["StoreRemapVectorWidth"],kernel["MIOutputVectorWidth"])
             kStr += inst("v_mov_b32", vgpr(vTmp1), hex((kernel["MacroTile0"]+ldsPad)*kw.bpeDexternal), \
@@ -10059,7 +10067,7 @@ class KernelWriterAssembly(KernelWriter):
               vgpr(self.addrVgpr), \
               vgpr(kw.coutRowPtr), \
               vgpr(elementVgpr), \
-              hex(log2(kw.bpeCexternal)), \
+              hex(log2(kw.bpeDexternal)), \
               "emitLddChange: init cb addr <-  coutRowPtr + coord0, scaled by BPE")
         elif ss.optSharedColVgpr:
           (d1,d0,vc1,vc0) = self.element
@@ -10071,7 +10079,7 @@ class KernelWriterAssembly(KernelWriter):
               vgpr(self.addrVgpr), \
               vgpr(kw.coutRowPtr), \
               vgpr(elementVgpr), \
-              hex(log2(kw.bpeCexternal)), \
+              hex(log2(kw.bpeDexternal)), \
               "emitLddChange: accumulate d0 lower and *= bpe into addr")
 
         if edge:

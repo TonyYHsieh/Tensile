@@ -573,7 +573,7 @@ namespace Tensile
 
                 virtual bool operator()(ContractionProblem const& problem) const override
                 {
-                    return value == (problem.c().strides() == problem.d().strides());
+                    return (!value) || (problem.c().strides() == problem.d().strides());
                 }
             };
 
