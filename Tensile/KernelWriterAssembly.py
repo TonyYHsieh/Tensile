@@ -1619,7 +1619,8 @@ class KernelWriterAssembly(KernelWriter):
 
     # Number of D strides to actually load into SGPR
     # Save some SGPR if LdcEqualsLdd
-    self.numSgprStridesDToLoad = 0 if kernel["LdcEqualsLdd"] else self.numSgprStridesD
+    # self.numSgprStridesDToLoad = 0 if kernel["LdcEqualsLdd"] else self.numSgprStridesD
+    self.numSgprStridesDToLoad = self.numSgprStridesD
 
     self.numSgprSizesFree = kernel["ProblemType"]["NumIndicesC"]
     self.numSgprAddressDbg = self.rpga if globalParameters["DebugKernel"] else 0
@@ -8570,8 +8571,7 @@ class KernelWriterAssembly(KernelWriter):
 
     if kernel["BufferStore"]:
       self.cinRowPtr  = self.vgprPool.checkOut(1, "cinRowPtr")
-      if not kernel["LdcEqualsLdd"]:
-        self.coutRowPtr = self.vgprPool.checkOut(1, "coutRowPtr")
+      self.coutRowPtr = self.vgprPool.checkOut(1, "coutRowPtr")
 
     tmpV0 = self.vgprPool.checkOut(2)
     kStr += vectorStaticDivideAndRemainder(tid1, tid0, "Serial", divisor, \
@@ -8661,8 +8661,7 @@ class KernelWriterAssembly(KernelWriter):
     tid1 = self.vgprPool.checkOut(1)
     if kernel["BufferStore"]:
       self.cinRowPtr  = self.vgprPool.checkOut(1, "cinRowPtr")
-      if not kernel["LdcEqualsLdd"]:
-        self.coutRowPtr = self.vgprPool.checkOut(1, "coutRowPtr")
+      self.coutRowPtr = self.vgprPool.checkOut(1, "coutRowPtr")
 
     wave_id = self.vgprPool.checkOut(1)
 
@@ -8881,8 +8880,7 @@ class KernelWriterAssembly(KernelWriter):
       self.vgprPool.checkIn(self.storeRemapOffsetCoord1)
     if kernel["BufferStore"]:
       self.vgprPool.checkIn(self.cinRowPtr)
-      if not kernel["LdcEqualsLdd"]:
-        self.vgprPool.checkIn(self.coutRowPtr)
+      self.vgprPool.checkIn(self.coutRowPtr)
     if not kernel["BufferStore"]:
       self.vgprPool.checkIn(self.addrD)
       self.vgprPool.checkIn(self.addrC)
@@ -9489,8 +9487,8 @@ class KernelWriterAssembly(KernelWriter):
       # can't have both of these enabled:
       assert (not (self.optSingleColVgpr and self.optSharedColVgpr))
 
-      # need another set of col VGPR to preserve scaled LDD
-      assert (not (self.optSharedColVgpr and not kernel["LdcEqualsLdd"]))
+#      # need another set of col VGPR to preserve scaled LDD
+#      assert (not (self.optSharedColVgpr and not kernel["LdcEqualsLdd"]))
 
       # packed1 not yet supported.  Would need to:
       # - extract packed dimensions from coord1 into
