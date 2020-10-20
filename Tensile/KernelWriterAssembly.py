@@ -9784,11 +9784,16 @@ class KernelWriterAssembly(KernelWriter):
 
     # storeChar is 'C' or 'D'
     # elementVgpr is coord0Vgpr*strideCD0, or optimized to just coord0Vgpr if strideCD0 is unit const
-    def emitExtractAndScalePackedDims(self, kernel, ss, beta, atomic, tmpVgpr, storeChar):
+    def emitExtractAndScalePackedDims(self, kernel, ss, tmpVgpr, storeChar):
       kStr = ""
       kw = self.kernelWriter
       packedIndices = kernel["PackedC0IndicesX"]
       packedBits = self.coord0Vgpr # start with coord0, will move to temp below
+      rowPtr = kw.cinRowPtr if (storeChar == 'C') else kw.coutRowPtr
+
+      if (len(packedIndices)>1) and (storeChar =='C') and (not kernel["LdcEqualsLdd"]):
+        return kStr
+
       for i,idx in enumerate(packedIndices[:-1]):
         # vgprTmp assignments:
         #   - tmp+0 may be the incoming packed coordinate 0, used on replay too
@@ -9833,7 +9838,7 @@ class KernelWriterAssembly(KernelWriter):
                   vgpr(tmpVgpr+2), "addrCalc += scaled extracted dim ")
 
         kStr += inst("_v_add_lshl_u32", vgpr(self.addrVgpr), \
-                  vgpr(kw.cinRowPtr), \
+                  vgpr(rowPtr), \
                   vgpr(self.addrVgpr), \
                   hex(log2(kw.bpeCexternal)), \
                   "packed: add rowPtr and scaleToBpe")
@@ -9843,87 +9848,86 @@ class KernelWriterAssembly(KernelWriter):
     """
     Needs 3 temporary VGPRs
     """
-    def emitScaleToBpe(self, kernel, ss, beta, atomic, tmpVgpr, firstInBatch):
+    def emitScaleToBpe(self, kernel, ss, tmpVgpr, singleUpdate, tc):
       kStr = ""
       kw = self.kernelWriter
       (d1,d0,vc1,vc0) = self.element
-
+      rowPtr = kw.cinRowPtr if (tc == 'C') else kw.coutRowPtr
       # set when we generate code that updates the address
       # optSingleColVgpr and optSharedColVgpr attempt to minimize these updates
       updatedAddr = False
 
       # scale and set final address:
-      if kernel["LdcEqualsLdd"] or beta or atomic:
-        strideC0 = kw.strideRef('C', 0)
-        if kw.isConstUnitStride(strideC0):
-          elementVgpr = self.coord0Vgpr
-        else:
-          kStr += inst("v_mul_lo_u32", \
-              vgpr(self.addrVgpr), \
-              vgpr(self.coord0Vgpr), \
-              strideC0, \
-              "scale element by non-unit stride")
-          elementVgpr = self.addrVgpr
+      stride0 = kw.strideRef(tc, 0)
+      if kw.isConstUnitStride(stride0):
+        elementVgpr = self.coord0Vgpr
+      else:
+        kStr += inst("v_mul_lo_u32", \
+            vgpr(self.addrVgpr), \
+            vgpr(self.coord0Vgpr), \
+            stride0, \
+            "scale element by non-unit stride")
+        elementVgpr = self.addrVgpr
 
-        if ss.optSingleColVgpr:
-          # This is first element in the first batch, create a byte address that will
-          # be re-used by subsequent elements:
-          # if this element is firstInBatch - may need to set up a bpe-scaled row pointer for the batch:
-          #  - for not LdcEqualsLdd - need row-ptr start of each batch
-          #  - or always init rowptr at the start of the first batch (so can be re-used in each batch)
-          assert (kw.coord0 == self.coord0Vgpr) # elementAddr assignment above assumes these are the same
+      if ss.optSingleColVgpr:
+        # This is first element in the first batch, create a byte address that will
+        # be re-used by subsequent elements:
+        # if this element is firstInBatch - may need to set up a bpe-scaled row pointer for the batch:
+        #  - for not LdcEqualsLdd - need row-ptr start of each batch
+        #  - or always init rowptr at the start of the first batch (so can be re-used in each batch)
+        assert (kw.coord0 == self.coord0Vgpr) # elementAddr assignment above assumes these are the same
 
-          if (not kernel["LdcEqualsLdd"] or ss.firstBatch) and firstInBatch:
-            updatedAddr = True
-            kStr += inst("_v_add_lshl_u32", \
-              vgpr(self.addrVgpr), \
-              vgpr(kw.cinRowPtr), \
-              vgpr(elementVgpr), \
-              hex(log2(kw.bpeCexternal)), \
-              "optSingleColVgpr scaleToBpe: sharedAddrVgpr <- cinRowPtr + coord0, scaled by BPE. BSHERE:coord0=%d, coord0Vgpr=%d"%(kw.coord0, self.coord0Vgpr))
-        elif ss.optSharedColVgpr:
-          # Need an address calculation for the first address in each row:
-          if d1==0 and vc1==0:
-            packedIndices = kernel["PackedC0IndicesX"]
-            if len(packedIndices) > 1:
-              updatedAddr = True
-              kStr += self.emitExtractAndScalePackedDims(kernel, ss, beta, atomic, tmpVgpr, 'C')
-            else:
-              updatedAddr = True
-              kStr += inst("_v_add_lshl_u32", \
-                vgpr(self.addrVgpr), \
-                vgpr(kw.cinRowPtr), \
-                vgpr(elementVgpr), \
-                hex(log2(kw.bpeCexternal)), \
-                "optSharedColVgpr scaleToBpe for first row: col addr <- cinRowPtr + coord0, scaled by BPE")
-        else:
-          # Generate final address calculation (to bytes) for each element
-          # The unpacking takes 8-10 instructions so could be worth optimizing someday :
-          # each col has same offset so could create a class to hold column-specific state including
-          # the byte address offset for that col and the mask in/out.
+        if singleUpdate:
+          updatedAddr = True
+          kStr += inst("_v_add_lshl_u32", \
+            vgpr(self.addrVgpr), \
+            vgpr(rowPtr), \
+            vgpr(elementVgpr), \
+            hex(log2(kw.bpeCexternal)), \
+            "optSingleColVgpr scaleToBpe: sharedAddrVgpr <- cinRowPtr + coord0, scaled by BPE. BSHERE:coord0=%d, coord0Vgpr=%d"%(kw.coord0, self.coord0Vgpr))
+      elif ss.optSharedColVgpr:
+        # Need an address calculation for the first address in each row:
+        if d1==0 and vc1==0:
           packedIndices = kernel["PackedC0IndicesX"]
           if len(packedIndices) > 1:
             updatedAddr = True
-            kStr += self.emitExtractAndScalePackedDims(kernel, ss, beta, atomic, tmpVgpr, 'C')
+            kStr += self.emitExtractAndScalePackedDims(kernel, ss, tmpVgpr, tc)
           else:
             updatedAddr = True
             kStr += inst("_v_add_lshl_u32", \
-                vgpr(self.addrVgpr), \
-                vgpr(kw.cinRowPtr), \
-                vgpr(elementVgpr), \
-                hex(log2(kw.bpeCexternal)), \
-                "scaleToBpe: accumulate d0 lower and *= bpe into Cin addr")
-
-        # if not optSrdIncForRow then we may have moved the row pointer
-        # and depending on paths above may not have refreshed addrVgpr already.
-        # if so - do it here:
-        if self.rowIncDirtyRowPtr and not updatedAddr:
+              vgpr(self.addrVgpr), \
+              vgpr(rowPtr), \
+              vgpr(elementVgpr), \
+              hex(log2(kw.bpeCexternal)), \
+              "optSharedColVgpr scaleToBpe for first row: col addr <- cinRowPtr + coord0, scaled by BPE")
+      else:
+        # Generate final address calculation (to bytes) for each element
+        # The unpacking takes 8-10 instructions so could be worth optimizing someday :
+        # each col has same offset so could create a class to hold column-specific state including
+        # the byte address offset for that col and the mask in/out.
+        packedIndices = kernel["PackedC0IndicesX"]
+        if len(packedIndices) > 1:
+          updatedAddr = True
+          kStr += self.emitExtractAndScalePackedDims(kernel, ss, tmpVgpr, tc)
+        else:
+          updatedAddr = True
           kStr += inst("_v_add_lshl_u32", \
-            vgpr(self.addrVgpr), \
-            vgpr(kw.cinRowPtr), \
-            vgpr(kw.coord0), \
-            hex(log2(kw.bpeCexternal)), \
-            "scaleToBpe: Update address with new rowPtr")
+              vgpr(self.addrVgpr), \
+              vgpr(rowPtr), \
+              vgpr(elementVgpr), \
+              hex(log2(kw.bpeCexternal)), \
+              "scaleToBpe: accumulate d0 lower and *= bpe into Cin addr")
+
+      # if not optSrdIncForRow then we may have moved the row pointer
+      # and depending on paths above may not have refreshed addrVgpr already.
+      # if so - do it here:
+      if self.rowIncDirtyRowPtr and not updatedAddr:
+        kStr += inst("_v_add_lshl_u32", \
+          vgpr(self.addrVgpr), \
+          vgpr(rowPtr), \
+          vgpr(kw.coord0), \
+          hex(log2(kw.bpeCexternal)), \
+          "scaleToBpe: Update address with new rowPtr")
 
       return kStr
 
@@ -10027,61 +10031,28 @@ class KernelWriterAssembly(KernelWriter):
                     sizeBoundary[1], "coord1 < size1" )
           kStr += inst("s_and_b64",  sgpr(mask,2), sgpr(tmpS01,2), sgpr(mask,2), "in0 && in1" )
 
-          kStr += self.emitScaleToBpe(kernel, ss, beta, atomic, tmpVgpr01, elementIdx==0)
+          kStr += self.emitScaleToBpe(kernel, ss, tmpVgpr01, elementIdx==0, 'C')
 
           if kernel["LdcEqualsLdd"] or beta or atomic:
               kStr += inst("v_cndmask_b32", vgpr(self.addrVgpr), -1, vgpr(self.addrVgpr), \
                         sgpr(mask,2), "clip if OOB. offset" )
         else:
-          kStr += self.emitScaleToBpe(kernel, ss, beta, atomic, tmpVgpr01, elementIdx==0)
+          kStr += self.emitScaleToBpe(kernel, ss, tmpVgpr01, elementIdx==0, 'C')
 
       return kStr
 
 
-    def emitLddChange(self, kernel, ss, edge, mask, isLastElement):
+    def emitLddChange(self, kernel, ss, edge, mask, isLastElement, tmpVgpr01):
+
       kStr = ""
-      kw = self.kernelWriter
 
-      # Set write address for D - this overwrites self.addrVgpr
       if kernel["BufferStore"]:
-        strideD0 = kw.strideRef('D', 0)
-        if kw.isConstUnitStride(strideD0):
-          elementVgpr = self.coord0Vgpr
-        else:
-          kStr += inst("v_mul_lo_u32", \
-              vgpr(self.addrVgpr), \
-              vgpr(self.coord0Vgpr), \
-              strideD0, \
-              "scale element by non-unit stride")
-          elementVgpr = self.addrVgpr
-
-        if ss.optSingleColVgpr:
-          assert (kw.coord0 == self.coord0Vgpr)
-          if isLastElement:
-            kStr += inst("_v_add_lshl_u32", \
-              vgpr(self.addrVgpr), \
-              vgpr(kw.coutRowPtr), \
-              vgpr(elementVgpr), \
-              hex(log2(kw.bpeCexternal)), \
-              "emitLddChange: init cb addr <-  coutRowPtr + coord0, scaled by BPE")
-        elif ss.optSharedColVgpr:
-          (d1,d0,vc1,vc0) = self.element
-          assert(0) # need a new VGPR for LDD != LDC here.
-          # since we are re-using the column VGPRs in the next batch
-        else: # not ss.optSingleColVgpr or optSharedColVgpr
-
-          kStr += inst("_v_add_lshl_u32", \
-              vgpr(self.addrVgpr), \
-              vgpr(kw.coutRowPtr), \
-              vgpr(elementVgpr), \
-              hex(log2(kw.bpeCexternal)), \
-              "emitLddChange: accumulate d0 lower and *= bpe into addr")
+        kStr += self.emitScaleToBpe(kernel, ss, tmpVgpr01, isLastElement, 'D')
 
         if edge:
           kStr += inst("v_cndmask_b32", vgpr(self.addrVgpr), -1, \
                     vgpr(self.addrVgpr), sgpr(mask,2), \
                     "LDD clip if OOB. offset")
-
       return kStr
 
     """
@@ -10912,31 +10883,7 @@ class KernelWriterAssembly(KernelWriter):
           kStr += inst("_v_addc_co_u32", vgpr(addr+1), "vcc", vgpr(addrC+1), \
               vgpr(addr+1), "vcc", "addr = C + index*bytes (hi)")
 
-      if atomic:
-        if not self.useAtomicAdd:
-          # load c into data+1 because of CAS structure
-          # TODO - Fix for double here, would need bigger load
-          # FIME
-          bps = kernel["ProblemType"]["DataType"].numBytes()
-          # gwvw is the number of elements in the batch
-          # iterate over number of atomic operations to perform, each of width atomicW
-          for avi in range(0, gwvw//atomicW):
-            dataV = ss.elementData[elementIdx] + int(avi*ss.cfg.numVgprsPerDataPerVI)
-            bpm = self.bpeCexternal * atomicW
-            useBuffer = kernel["BufferStore"]
-            if kernel["BufferStore"]: # yes, BufferStore here - use same addressing regs for this load
-              addr0 = vgpr(addr)
-              addr1 = sgpr("SrdC", 4)
-            else:
-              addr0 = vgpr(addr,2)
-              addr1 = ""
-            # Calculate vgpr Indx for 32-bit/64-bit instruction
-            # DGEMM use SRCS[2] register
-            vgprIdx = 1*(bpm//4)
-            kStr += self.chooseGlobalRead(useBuffer, bpm, dataV+vgprIdx, \
-                      addr0, addr1, soffset=0, offset=addrCalc.globalOffset, extraFields="",
-                      comment="load C (atomic) bpm=%u vaw=%u"%(bpm,atomicW)).toStr()
-      elif beta:
+      if beta:
         bps = kernel["ProblemType"]["DataType"].numBytes() * gwvw
         useBuffer = kernel["BufferStore"]
         if kernel["BufferStore"]:
@@ -10969,11 +10916,36 @@ class KernelWriterAssembly(KernelWriter):
                     extraFields=extraFields, \
                     comment="load C for beta calc").toStr()
 
+      if not kernel["LdcEqualsLdd"]:
+        kStr += addrCalc.emitLddChange(kernel, ss, edge, mask, elementIdx == len(batchElements)-1, tmpVgpr)
+
+      if atomic:
+        if not self.useAtomicAdd:
+          # load c into data+1 because of CAS structure
+          # TODO - Fix for double here, would need bigger load
+          # FIME
+          bps = kernel["ProblemType"]["DataType"].numBytes()
+          # gwvw is the number of elements in the batch
+          # iterate over number of atomic operations to perform, each of width atomicW
+          for avi in range(0, gwvw//atomicW):
+            dataV = ss.elementData[elementIdx] + int(avi*ss.cfg.numVgprsPerDataPerVI)
+            bpm = self.bpeCexternal * atomicW
+            useBuffer = kernel["BufferStore"]
+            if kernel["BufferStore"]: # yes, BufferStore here - use same addressing regs for this load
+              addr0 = vgpr(addr)
+              addr1 = sgpr("SrdD", 4)
+            else:
+              addr0 = vgpr(addr,2)
+              addr1 = ""
+            # Calculate vgpr Indx for 32-bit/64-bit instruction
+            # DGEMM use SRCS[2] register
+            vgprIdx = 1*(bpm//4)
+            kStr += self.chooseGlobalRead(useBuffer, bpm, dataV+vgprIdx, \
+                      addr0, addr1, soffset=0, offset=addrCalc.globalOffset, extraFields="",
+                      comment="load D (atomic) bpm=%u vaw=%u"%(bpm,atomicW)).toStr()
+
       if kernel["InterleaveAlpha"] and applyAlpha:
         kStr += self.applyAlpha(kernel, gwvw, ss.elementSumIdx, elementIdx, tmpS01)
-
-      if not kernel["LdcEqualsLdd"]:
-        kStr += addrCalc.emitLddChange(kernel, ss, edge, mask, elementIdx == len(batchElements)-1)
 
       if not kernel["BufferStore"]:
         offsetSrc = (tmpVgpr+2) if beta else addr
