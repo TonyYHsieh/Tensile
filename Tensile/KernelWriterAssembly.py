@@ -10763,6 +10763,44 @@ class KernelWriterAssembly(KernelWriter):
 
     return kStr
 
+
+  ##############################################################################
+  # Global Read C Input
+  ##############################################################################
+  def readCInput(self, kernel, ss, addrCalc, vc0, data, gwvw, addr, tmpS01):
+    kStr = ""
+    bps = kernel["ProblemType"]["DataType"].numBytes() * gwvw
+    useBuffer = kernel["BufferStore"]
+
+    if kernel["BufferStore"]:
+      addr0 = vgpr(addr)
+      addr1 = sgpr("SrdC", 4)
+    else:
+      addr0 = vgpr(addr,2)
+      addr1 = ""
+
+    if ss.optSrdIncForRow and addrCalc.rowInc:
+      kStr += addrCalc.incrementToNextRow(kernel, "C", ss, tmpS01)
+
+    if kernel["ProblemType"]["DataType"].isHalf():
+      kStr += self.chooseGlobalRead(useBuffer, bps, data, \
+                addr0, addr1, soffset=0, offset=addrCalc.globalOffset, \
+                extraFields="", hi16=vc0 % 2,
+                comment="load C for beta calc").toStr()
+    elif kernel["ProblemType"]["DataType"].isBFloat16() or \
+         kernel["ProblemType"]["DataType"].isInt8x4() or \
+         kernel["ProblemType"]["DataType"].isSingle() or \
+         kernel["ProblemType"]["DataType"].isDouble() or \
+         kernel["ProblemType"]["DataType"].isSingleComplex() or \
+         kernel["ProblemType"]["DataType"].isDoubleComplex():
+      kStr += self.chooseGlobalRead(useBuffer, bps, data, \
+                addr0, addr1, soffset=0, offset=addrCalc.globalOffset, \
+                extraFields="", \
+                comment="load C for beta calc").toStr()
+
+    return kStr
+
+
   ##############################################################################
   # Global Write Batch
   ##############################################################################
@@ -10864,35 +10902,8 @@ class KernelWriterAssembly(KernelWriter):
           kStr += inst("_v_addc_co_u32", vgpr(addr+1), "vcc", vgpr(addrC+1), vgpr(addr+1), "vcc", "addr = C + index*bytes (hi)")
 
       if beta:
-        bps = kernel["ProblemType"]["DataType"].numBytes() * gwvw
-        useBuffer = kernel["BufferStore"]
-        if kernel["BufferStore"]:
-          addr0 = vgpr(addr)
-          addr1 = sgpr("SrdC", 4)
-        else:
-          addr0 = vgpr(addr,2)
-          addr1 = ""
-        extraFields = ""
+        kStr += self.readCInput(kernel, ss, addrCalc, vc0, data, gwvw, addr, tmpS01)
         loadsIssued += 1
-
-        if ss.optSrdIncForRow and addrCalc.rowInc:
-          kStr += addrCalc.incrementToNextRow(kernel, "C", ss, tmpS01)
-
-        if kernel["ProblemType"]["DataType"].isHalf():
-          kStr += self.chooseGlobalRead(useBuffer, bps, data, \
-                    addr0, addr1, soffset=0, offset=addrCalc.globalOffset, \
-                    extraFields=extraFields, hi16=vc0 % 2,
-                    comment="load C for beta calc").toStr()
-        elif kernel["ProblemType"]["DataType"].isBFloat16() or \
-             kernel["ProblemType"]["DataType"].isInt8x4() or \
-             kernel["ProblemType"]["DataType"].isSingle() or \
-             kernel["ProblemType"]["DataType"].isDouble() or \
-             kernel["ProblemType"]["DataType"].isSingleComplex() or \
-             kernel["ProblemType"]["DataType"].isDoubleComplex():
-          kStr += self.chooseGlobalRead(useBuffer, bps, data, \
-                    addr0, addr1, soffset=0, offset=addrCalc.globalOffset, \
-                    extraFields=extraFields, \
-                    comment="load C for beta calc").toStr()
 
       kStr += addrCalc.emitLdChange(kernel, ss, 'D', edge, mask, (elementIdx == len(batchElements)-1), tmpVgpr)
 
