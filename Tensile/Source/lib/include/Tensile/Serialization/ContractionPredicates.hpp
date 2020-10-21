@@ -69,7 +69,6 @@ namespace Tensile
                     Base::template Pair<Predicates::Contraction::StrideBEqual>(),
                     Base::template Pair<Predicates::Contraction::StrideCEqual>(),
                     Base::template Pair<Predicates::Contraction::StrideDEqual>(),
-                    Base::template Pair<Predicates::Contraction::CDStridesEqual>(),
                     Base::template Pair<Predicates::Contraction::LDCEqualsLDD>(),
                     Base::template Pair<Predicates::Contraction::BetaZero>(),
                     Base::template Pair<Predicates::Contraction::BetaOne>(),
@@ -83,6 +82,7 @@ namespace Tensile
                     Base::template Pair<Predicates::Contraction::BufferStoreOffsetLimitCheck>(),
                     Base::template Pair<Predicates::Contraction::WorkspaceCheck>(),
                     Base::template Pair<Predicates::Contraction::PersistentKernelCheck>(),
+                    Base::template Pair<Predicates::Contraction::CDStridesEqualInMultiFreeA>(),
                 });
 
                 auto gmap = Generic::GetSubclasses();
@@ -180,12 +180,6 @@ namespace Tensile
         };
 
         template <typename IO>
-        struct MappingTraits<Predicates::Contraction::CDStridesEqual, IO>
-            : public AutoMappingTraits<Predicates::Contraction::CDStridesEqual, IO>
-        {
-        };
-
-        template <typename IO>
         struct MappingTraits<Predicates::Contraction::LDCEqualsLDD, IO>
             : public AutoMappingTraits<Predicates::Contraction::LDCEqualsLDD, IO>
         {
@@ -260,6 +254,12 @@ namespace Tensile
         template <typename IO>
         struct MappingTraits<Predicates::Contraction::PersistentKernelCheck, IO>
             : public AutoMappingTraits<Predicates::Contraction::PersistentKernelCheck, IO>
+        {
+        };
+
+        template <typename IO>
+        struct MappingTraits<Predicates::Contraction::CDStridesEqualInMultiFreeA, IO>
+            : public AutoMappingTraits<Predicates::Contraction::CDStridesEqualInMultiFreeA, IO>
         {
         };
     } // namespace Serialization
