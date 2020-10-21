@@ -976,7 +976,6 @@ namespace Tensile
 
                 virtual bool operator()(ContractionProblem const& problem) const override
                 {
-                    std::cout << "Tony freeIndicesA size " << problem.freeIndicesA().size() << std::endl;
                     return (problem.freeIndicesA().size() == 1)
                         || (problem.c().strides() == problem.d().strides());
                 }
