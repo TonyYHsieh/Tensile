@@ -9912,7 +9912,7 @@ class KernelWriterAssembly(KernelWriter):
     """
     Generate code to protect address offset in edge case
     """
-    def edgeProtectCode(self, kernel, beta, atomic, mask, tmpVgpr, tmpSgpr):
+    def edgeProtectCode(self, kernel, beta, atomic, mask, tmpSgpr):
       kStr = ""
       kw = self.kernelWriter
       tmpS01 = tmpSgpr
@@ -9955,11 +9955,28 @@ class KernelWriterAssembly(KernelWriter):
         optimization - if no setup code is required the coord0 can be the input.
     """
     # TODO - mask should be part of AddrCalc state not passed as parm
-    def emitAddressSetupCode(self, kernel, ss, tmpVgpr01, tmpS01, edge, beta, atomic, mask, elementIdx):
+    def emitAddressSetupCode(self, kernel, ss, tmpVgpr, tmpS01, edge, beta, atomic, mask, elementIdx, addr):
       kStr = ""
       kw = self.kernelWriter
 
-      kStr += self.emitAddressCoordIncrement(kernel, ss, tmpVgpr01, tmpS01, edge)
+      kStr += self.emitAddressCoordIncrement(kernel, ss, tmpVgpr, tmpS01, edge)
+
+      # calculate flat load offset
+      if not kernel["BufferStore"]:
+        # flat: in-bounds exec mask
+        # global offset macro (requires 3 tmpVgpr)
+        # final address = C + index*bytes
+        kStr += "GLOBAL_OFFSET_C %u" % addr
+        for i in range(0, kernel["ProblemType"]["NumIndicesC"]):
+          if i == kernel["ProblemType"]["Index0"]:
+            kStr += ", %s" % (self.coord0Vgpr)
+          elif i == kernel["ProblemType"]["Index1"]:
+            kStr += ", %s" % (self.coord1Vgpr)
+          else: # just a group index
+            kStr += ", sgprWorkGroup%u"%i
+        kStr += ", %s%s" % ((tmpVgpr+2), kw.endLine)
+        kStr += inst("v_mov_b32", vgpr(tmpVgpr+2), vgpr(addr+0), "temp store offset 0")
+        kStr += inst("v_mov_b32", vgpr(tmpVgpr+3), vgpr(addr+1), "temp store offset 1")
 
       # Move the row ptr VGPR
       # optSrdIncForRow moves the SRD so don't move here
@@ -9989,8 +10006,8 @@ class KernelWriterAssembly(KernelWriter):
 
           kStr += kw.comment("shift vector components d1")
           vw = kernel["GlobalLoadVectorWidthB"]
-          vTmp1 = tmpVgpr01
-          vTmp2 = tmpVgpr01+1
+          vTmp1 = tmpVgpr
+          vTmp2 = tmpVgpr+1
           sTmp1 = tmpS01
           sTmp2 = tmpS01+2
           # check conditions
@@ -10022,20 +10039,28 @@ class KernelWriterAssembly(KernelWriter):
                           sgpr(sTmp1,2), "set new rowStart if meet conditions" )
           kStr += "\n"
 
-
-
       return kStr
 
 
-    def emitLdChange(self, kernel, ss, tc, edge, mask, singleUpdate, tmpVgpr01):
 
+    """
+    Generate code for final C read/D write address
+    """
+    def emitLdChange(self, kernel, ss, tc, edge, mask, singleUpdate, tmpVgpr, addr, BufAddr):
       kStr = ""
       if kernel["BufferStore"]:
-        kStr += self.emitScaleToBpe(kernel, ss, tmpVgpr01, singleUpdate, tc)
+        kStr += self.emitScaleToBpe(kernel, ss, tmpVgpr, singleUpdate, tc)
         if edge:
           kStr += inst("v_cndmask_b32", vgpr(self.addrVgpr), -1, vgpr(self.addrVgpr), \
                        sgpr(mask,2), "LD%s clip if OOB. offset" % tc )
+      else:
+        # store a copy of the offset in 2 of the tmpVgpr for D
+        kStr += inst("_v_add_co_u32",  vgpr(addr+0), "vcc", vgpr(BufAddr+0), vgpr(tmpVgpr+2), \
+                     "addr = C(D) + index*bytes (lo)" )
+        kStr += inst("_v_addc_co_u32", vgpr(addr+1), "vcc", vgpr(BufAddr+1), vgpr(tmpVgpr+3), \
+                     "vcc", "addr = C(D) + index*bytes (hi)")
       return kStr
+
 
     """
     Generate code to move to the next row(s)
@@ -10870,42 +10895,17 @@ class KernelWriterAssembly(KernelWriter):
       vc1 = element[2]
       vc0 = element[3]
 
-      kStr += addrCalc.emitAddressSetupCode(kernel, ss, tmpVgpr, tmpS01, edge, beta, atomic, mask, elementIdx)
+      kStr += addrCalc.emitAddressSetupCode(kernel, ss, tmpVgpr, tmpS01, edge, beta, atomic, mask, elementIdx, addr)
 
       if edge:
-        kStr += addrCalc.edgeProtectCode(kernel, beta, atomic, mask, tmpVgpr, tmpSgpr)
+        kStr += addrCalc.edgeProtectCode(kernel, beta, atomic, mask, tmpSgpr)
 
       if beta:
-        kStr += addrCalc.emitLdChange(kernel, ss, 'C', edge, mask, (elementIdx == 0), tmpVgpr)
-
-      if not kernel["BufferStore"]:
-        # flat: in-bounds exec mask
-
-        # global offset macro (requires 3 tmpVgpr)
-        # final address = C + index*bytes
-        kStr += "GLOBAL_OFFSET_C %u" % addr
-        for i in range(0, kernel["ProblemType"]["NumIndicesC"]):
-          if i == kernel["ProblemType"]["Index0"]:
-            kStr += ", %s" % (addrCalc.coord0Vgpr)
-          elif i == kernel["ProblemType"]["Index1"]:
-            kStr += ", %s" % (addrCalc.coord1Vgpr)
-          else: # just a group index
-            kStr += ", sgprWorkGroup%u"%i
-        kStr += ", %s%s" % ((tmpVgpr+2), self.endLine)
-
-        # store a copy of the offset in 2 of the tmpVgpr for D
-        if beta:
-          kStr += inst("v_mov_b32", vgpr(tmpVgpr+2), vgpr(addr+0), "temp store offset 0")
-          kStr += inst("v_mov_b32", vgpr(tmpVgpr+3), vgpr(addr+1), "temp store offset 1")
-
-          kStr += inst("_v_add_co_u32",  vgpr(addr+0), "vcc", vgpr(addrC+0), vgpr(addr+0), "addr = C + index*bytes (lo)" )
-          kStr += inst("_v_addc_co_u32", vgpr(addr+1), "vcc", vgpr(addrC+1), vgpr(addr+1), "vcc", "addr = C + index*bytes (hi)")
-
-      if beta:
+        kStr += addrCalc.emitLdChange(kernel, ss, 'C', edge, mask, (elementIdx == 0), tmpVgpr, addr, addrC)
         kStr += self.readCInput(kernel, ss, addrCalc, vc0, data, gwvw, addr, tmpS01)
         loadsIssued += 1
 
-      kStr += addrCalc.emitLdChange(kernel, ss, 'D', edge, mask, (elementIdx == len(batchElements)-1), tmpVgpr)
+      kStr += addrCalc.emitLdChange(kernel, ss, 'D', edge, mask, (elementIdx == len(batchElements)-1), tmpVgpr, addr, addrD)
 
       if atomic and (not self.useAtomicAdd):
         # load c into data+1 because of CAS structure
@@ -10935,13 +10935,6 @@ class KernelWriterAssembly(KernelWriter):
         kStr += self.applyAlpha(kernel, gwvw, ss.elementSumIdx, elementIdx, tmpS01)
 
       if not kernel["BufferStore"]:
-        offsetSrc = (tmpVgpr+2) if beta else addr
-
-        kStr += inst("_v_add_co_u32",  vgpr(addr+0), "vcc", vgpr(addrD+0), \
-            vgpr(offsetSrc+0), "addr = D + index*bytes (lo)" )
-        kStr += inst("_v_addc_co_u32", vgpr(addr+1), "vcc", vgpr(addrD+1), \
-            vgpr(offsetSrc+1), "vcc", "addr = D + index*bytes (hi)")
-
         # restore full exec mask for calculating addr of next element
         if edge and (beta or atomic):
           kStr += inst("s_mov_b64", "exec", -1, "full mask -1 -> exec" )
