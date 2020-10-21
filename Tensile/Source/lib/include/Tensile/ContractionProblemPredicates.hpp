@@ -987,6 +987,29 @@ namespace Tensile
                 }
             };
 
+            struct CDStridesEqualInMultiFreeA : public Predicate_CRTP<CDStridesEqualInMultiFreeA, ContractionProblem>
+            {
+                enum
+                {
+                    HasIndex = false,
+                    HasValue = false
+                };
+
+                CDStridesEqualInMultiFreeA() = default;
+
+                static std::string Type()
+                {
+                    return "CDStridesEqualInMultiFreeA";
+                }
+
+                virtual bool operator()(ContractionProblem const& problem) const override
+                {
+                    std::cout << "Tony freeIndicesA size " << problem.freeIndicesA().size() << std::endl;
+                    return (problem.freeIndicesA().size() == 1)
+                        || (problem.c().strides() == problem.d().strides());
+                }
+            };
+
         } // namespace Contraction
 
         /**

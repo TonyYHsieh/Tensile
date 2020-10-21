@@ -308,6 +308,8 @@ class ProblemPredicate(Properties.Predicate):
             rv += [cls('LeadingFree0SizesGreaterOrEqual', value=minFree0)]
             rv += [cls('LeadingFree1SizesGreaterOrEqual', value=minFree1)]
 
+        rv += [cls("CDStridesEqualInMultiFreeA")]
+
         if "KernelLanguage" in state:
             rv += [cls("KernelLanguageCompatible", value=state["KernelLanguage"])]
 
