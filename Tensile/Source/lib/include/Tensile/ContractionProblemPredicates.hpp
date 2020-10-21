@@ -550,34 +550,6 @@ namespace Tensile
                 }
             };
 
-            struct CDStridesEqual : public Predicate_CRTP<CDStridesEqual, ContractionProblem>
-            {
-                enum
-                {
-                    HasIndex = false,
-                    HasValue = true
-                };
-
-                bool value;
-
-                CDStridesEqual() = default;
-                CDStridesEqual(bool value)
-                    : value(value)
-                {
-                }
-
-                static std::string Type()
-                {
-                    return "CDStridesEqual";
-                }
-
-                virtual bool operator()(ContractionProblem const& problem) const override
-                {
-                    return true;
-//                    return (!value) || (problem.c().strides() == problem.d().strides());
-                }
-            };
-
             struct LDCEqualsLDD : public Predicate_CRTP<LDCEqualsLDD, ContractionProblem>
             {
                 enum

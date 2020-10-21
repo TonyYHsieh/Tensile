@@ -69,7 +69,6 @@ namespace Tensile
                     Base::template Pair<Predicates::Contraction::StrideBEqual>(),
                     Base::template Pair<Predicates::Contraction::StrideCEqual>(),
                     Base::template Pair<Predicates::Contraction::StrideDEqual>(),
-                    Base::template Pair<Predicates::Contraction::CDStridesEqual>(),
                     Base::template Pair<Predicates::Contraction::LDCEqualsLDD>(),
                     Base::template Pair<Predicates::Contraction::BetaZero>(),
                     Base::template Pair<Predicates::Contraction::BetaOne>(),
@@ -177,12 +176,6 @@ namespace Tensile
         template <typename IO>
         struct MappingTraits<Predicates::Contraction::StrideDEqual, IO>
             : public AutoMappingTraits<Predicates::Contraction::StrideDEqual, IO>
-        {
-        };
-
-        template <typename IO>
-        struct MappingTraits<Predicates::Contraction::CDStridesEqual, IO>
-            : public AutoMappingTraits<Predicates::Contraction::CDStridesEqual, IO>
         {
         };
 
