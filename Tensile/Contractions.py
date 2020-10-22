@@ -309,8 +309,10 @@ class ProblemPredicate(Properties.Predicate):
             rv += [cls('LeadingFree0SizesGreaterOrEqual', value=minFree0)]
             rv += [cls('LeadingFree1SizesGreaterOrEqual', value=minFree1)]
 
-        if len(state["PackedC0IndicesX"]) > 1:
-          rv += [cls("CDStridesEqualInMultiFreeA")]
+        if "LdcEqualsLdd" not in state or state["LdcEqualsLdd"] == True:
+            rv += [cls("CDStridesEqual", value = True)]
+        else:
+            rv += [cls("CDStridesEqual", value = False)]
 
         if "KernelLanguage" in state:
             rv += [cls("KernelLanguageCompatible", value=state["KernelLanguage"])]

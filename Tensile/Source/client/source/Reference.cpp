@@ -282,7 +282,7 @@ namespace Tensile
                 }
 
                 auto cIndex = c.index(cCoord);
-                auto dIndex = d.index(dCoord);
+                auto dIndex = d.index(cCoord);
 
                 // Ensure zero*nan returns zero
                 auto beta = static_cast<typename Inputs::DType>(inputs.beta);

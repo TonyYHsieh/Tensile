@@ -802,7 +802,7 @@ def writeSolutionAndExactTable(scheduleName, deviceNames, schedProbName, problem
         solution["AssertFree0ElementMultiple"], \
         solution["AssertFree1ElementMultiple"], \
         solution["AssertMinApproxSize"], \
-        False, \
+        solution["LdcEqualsLdd"], \
         solution["PackBatchDims"]==2, \
         solution["PackBatchDims"]==1, \
         "," if i < len(solutionsForSchedule)-1 else "", \
