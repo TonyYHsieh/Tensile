@@ -9913,7 +9913,7 @@ class KernelWriterAssembly(KernelWriter):
     """
     Generate code to protect address offset in edge case
     """
-    def edgeProtectCode(self, kernel, beta, atomic, mask, tmpSgpr):
+    def edgeProtectCode(self, kernel, edge, beta, atomic, mask, tmpSgpr):
       kStr = ""
       kw = self.kernelWriter
       tmpS01 = tmpSgpr
@@ -9921,7 +9921,7 @@ class KernelWriterAssembly(KernelWriter):
 
       # Now do the edge check and compute the address in bytes:
       if kernel["BufferStore"]:
-        if (not kernel["StoreRemapVectorWidth"]) or (kernel["StoreRemapVectorWidth"] and beta):
+        if edge and (not kernel["StoreRemapVectorWidth"] or (kernel["StoreRemapVectorWidth"] and beta)):
           # Set address to -1 if OOB on either dimension
           # and only check the x/coord0 index here, save a couple inst
           sizeBoundary = [0,0]
@@ -10048,15 +10048,14 @@ class KernelWriterAssembly(KernelWriter):
       return kStr
 
 
-
     """
     Generate code for final C read/D write address
     """
-    def emitLdChange(self, kernel, ss, tc, edge, mask, singleUpdate, tmpVgpr, addr, BufAddr):
+    def emitLdChange(self, kernel, ss, tc, edge, beta, mask, singleUpdate, tmpVgpr, addr, BufAddr):
       kStr = ""
       if kernel["BufferStore"]:
         kStr += self.emitScaleToBpe(kernel, ss, tmpVgpr, singleUpdate, tc)
-        if edge:
+        if edge and (not kernel["StoreRemapVectorWidth"] or (kernel["StoreRemapVectorWidth"] and beta)):
           kStr += inst("v_cndmask_b32", vgpr(self.addrVgpr), -1, vgpr(self.addrVgpr), \
                        sgpr(mask,2), "LD%s clip if OOB. offset" % tc )
       else:
@@ -10904,14 +10903,14 @@ class KernelWriterAssembly(KernelWriter):
       kStr += addrCalc.emitAddressSetupCode(kernel, ss, tmpVgpr, tmpS01, edge, beta, atomic, mask, elementIdx, addr)
 
       if edge:
-        kStr += addrCalc.edgeProtectCode(kernel, beta, atomic, mask, tmpSgpr)
+        kStr += addrCalc.edgeProtectCode(kernel, edge, beta, atomic, mask, tmpSgpr)
 
       if beta:
-        kStr += addrCalc.emitLdChange(kernel, ss, 'C', edge, mask, (elementIdx == 0), tmpVgpr, addr, addrC)
+        kStr += addrCalc.emitLdChange(kernel, ss, 'C', edge, beta, mask, (elementIdx == 0), tmpVgpr, addr, addrC)
         kStr += self.readCInput(kernel, ss, addrCalc, vc0, data, gwvw, addr, tmpS01)
         loadsIssued += 1
 
-      kStr += addrCalc.emitLdChange(kernel, ss, 'D', edge, mask, (elementIdx == len(batchElements)-1), tmpVgpr, addr, addrD)
+      kStr += addrCalc.emitLdChange(kernel, ss, 'D', edge, beta, mask, (elementIdx == len(batchElements)-1), tmpVgpr, addr, addrD)
 
       if atomic and (not self.useAtomicAdd):
         # load c into data+1 because of CAS structure
