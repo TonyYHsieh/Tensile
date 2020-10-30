@@ -413,6 +413,11 @@ namespace Tensile
             }
         }
 
+        rv.args.append<uint32_t>("offsetD", 0);
+        rv.args.append<uint32_t>("offsetC", 0);
+        rv.args.append<uint32_t>("offsetA", 0);
+        rv.args.append<uint32_t>("offsetB", 0);
+
         if(sizeMapping.packSummationDims)
             // boundIndices are ordered with unroll last.
             // Magic numbers for all but first are needed to unpack other dims.
