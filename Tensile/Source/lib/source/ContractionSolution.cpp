@@ -634,6 +634,9 @@ namespace Tensile
             idx++;
         }
 
+        rv.args.append<uint32_t>("offsetD", d.offset());
+        rv.args.append<uint32_t>("offsetC", c.offset());
+
         rv.args.append<typename TypedInputs::BetaType>("beta", inputs.beta);
 
         return rv;

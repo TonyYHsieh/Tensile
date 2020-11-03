@@ -879,6 +879,12 @@ class KernelWriterSource(KernelWriter):
     for i in range(0, kernel["ProblemType"]["TotalIndices"]):
       s += "," + self.endLine + "  unsigned int size" + self.indexChars[i]
 
+    # offset
+    s += "," + self.endLine + "  unsigned int offsetD"
+    s += "," + self.endLine + "  unsigned int offsetC"
+    s += "," + self.endLine + "  unsigned int offsetA"
+    s += "," + self.endLine + "  unsigned int offsetB"
+
     for idxChar in self.magicSumChars:
       s += ",%s  unsigned magicNumberNumIter%s /*PSD*/" % (self.endLine, idxChar)
       s += ",%s  unsigned magicShiftNumIter%s /*PSD*/" % (self.endLine, idxChar)
@@ -1029,6 +1035,14 @@ class KernelWriterSource(KernelWriter):
         % (self.sharedDeclStr, self.endLine )
 
 
+    ####################################
+    # apply offset
+    kStr += self.endLine
+    kStr += "  D = D + offsetD;" + self.endLine
+    kStr += "  C = C + offsetC;" + self.endLine
+    kStr += "  A = A + offsetA;" + self.endLine
+    kStr += "  B = B + offsetB;" + self.endLine
+
     if 0:
       # in some cases we know the pad values at compile time and could hard-code here.  Not enabled.
       for tc in ('A', 'B'):
@@ -1048,8 +1062,9 @@ class KernelWriterSource(KernelWriter):
     self.magicNonSumChars = kernel["PackedC0IdxChars"][:-1] + kernel["PackedC1IdxChars"][:-1]
 
     if kernel["MagicDivAlg"] == 2:
-      kStr += "typedef struct MagicStruct {unsigned M; int a; int s;} MagicStruct;" + self.endLine
-      kStr += "const unsigned MAGIC_STRUCT_A = 0x80000000; // for extracting a-bit from shift kernarg" + self.endLine
+      kStr += self.endLine
+      kStr += "  typedef struct MagicStruct {unsigned M; int a; int s;} MagicStruct;" + self.endLine
+      kStr += "  const unsigned MAGIC_STRUCT_A = 0x80000000; // for extracting a-bit from shift kernarg" + self.endLine
       kStr += "#define MAGIC_DIV2(dividend, magic) (((((uint64_t)(dividend) * magic.M) >> 32) + dividend*magic.a) >> magic.s)%s" % self.endLine
 
       sumParms=[(idxChar, "magicStruct%s"%idxChar, "NumIter%s"%idxChar) for idxChar in self.magicSumChars]
