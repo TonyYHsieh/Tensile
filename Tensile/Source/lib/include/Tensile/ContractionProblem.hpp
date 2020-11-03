@@ -136,12 +136,16 @@ namespace Tensile
                                                size_t   batchSize,
                                                size_t   lda,
                                                size_t   aStride,
+                                               size_t   aOffset,
                                                size_t   ldb,
                                                size_t   bStride,
+                                               size_t   bOffset,
                                                size_t   ldc,
                                                size_t   cStride,
+                                               size_t   cOffset,
                                                size_t   ldd,
                                                size_t   dStride,
+                                               size_t   dOffset,
                                                double   beta);
 
         /**
@@ -154,8 +158,11 @@ namespace Tensile
                                        size_t n,
                                        size_t k,
                                        size_t lda,
+                                       size_t offsetA,
                                        size_t ldb,
+                                       size_t offsetB,
                                        size_t ldc,
+                                       size_t offsetC,
                                        double beta,
                                        bool   unused,
                                        size_t batchCount);
@@ -202,18 +209,22 @@ namespace Tensile
    * @param aType    Data type of A
    * @param aStrides Strides of A
    * @param aOps     Operations to apply to A as it is read
+   * @param aOffset  start offset of buffer A
    *
    * @param bType    Data type of B
    * @param bStrides Strides of B
    * @param bOps     Operations to apply to B as it is read
+   * @param bOffset  start offset of buffer B
    *
    * @param cType    Data type of C
    * @param cStrides Strides of C
    * @param cOps     Operations to apply to C as it is read
+   * @param cOffset  start offset of buffer C
    *
    * @param dType    Data type of D
    * @param dStrides Strides of D
    * @param dOps     Operations to apply to D as it is read
+   * @param dOffset  start offset of buffer D
    *
    * @param beta Representative value of beta. Is only used to possibly
    *             select a more efficient kernel if we know that
@@ -226,15 +237,19 @@ namespace Tensile
                                                  DataType                   aType,
                                                  std::vector<size_t> const& aStrides,
                                                  TensorOps const&           aOps,
+                                                 size_t                     aOffset,
                                                  DataType                   bType,
                                                  std::vector<size_t> const& bStrides,
                                                  TensorOps const&           bOps,
+                                                 size_t                     bOffset,
                                                  DataType                   cType,
                                                  std::vector<size_t> const& cStrides,
                                                  TensorOps const&           cOps,
+                                                 size_t                     cOffset,
                                                  DataType                   dType,
                                                  std::vector<size_t> const& dStrides,
                                                  TensorOps const&           dOps,
+                                                 size_t                     dOffset,
                                                  double                     beta);
 
         /**
@@ -249,15 +264,19 @@ namespace Tensile
    *
    * @param aType    Data type of A
    * @param aStrides Strides of A
+   * @param aOffset  Data offset of buffer A
    *
    * @param bType    Data type of B
    * @param bStrides Strides of B
+   * @param bOffset  Data offset of buffer B
    *
    * @param cType    Data type of C
    * @param cStrides Strides of C
+   * @param cOffset  Data offset of buffer C
    *
    * @param dType    Data type of D
    * @param dStrides Strides of D
+   * @param dOffset  Data offset of buffer D
    *
    * @param beta Representative value of beta. Is only used to possibly
    *             select a more efficient kernel if we know that
@@ -267,12 +286,16 @@ namespace Tensile
                                                  std::vector<size_t> const& indexSizes,
                                                  DataType                   aType,
                                                  std::vector<size_t> const& aStrides,
+                                                 size_t                     aOffset,
                                                  DataType                   bType,
                                                  std::vector<size_t> const& bStrides,
+                                                 size_t                     bOffset,
                                                  DataType                   cType,
                                                  std::vector<size_t> const& cStrides,
+                                                 size_t                     cOffset,
                                                  DataType                   dType,
                                                  std::vector<size_t> const& dStrides,
+                                                 size_t                     dOffset,
                                                  double                     beta);
 
         ContractionProblem(TensorDescriptor const& a,

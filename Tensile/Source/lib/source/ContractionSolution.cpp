@@ -413,10 +413,10 @@ namespace Tensile
             }
         }
 
-        rv.args.append<uint32_t>("offsetD", 0);
-        rv.args.append<uint32_t>("offsetC", 0);
-        rv.args.append<uint32_t>("offsetA", 0);
-        rv.args.append<uint32_t>("offsetB", 0);
+        rv.args.append<uint32_t>("offsetD", d.offset());
+        rv.args.append<uint32_t>("offsetC", c.offset());
+        rv.args.append<uint32_t>("offsetA", a.offset());
+        rv.args.append<uint32_t>("offsetB", b.offset());
 
         if(sizeMapping.packSummationDims)
             // boundIndices are ordered with unroll last.
