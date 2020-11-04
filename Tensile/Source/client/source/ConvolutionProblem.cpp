@@ -429,7 +429,7 @@ namespace Tensile
                             activationDims.end(),
                             activationStri.begin(),
                             activationStri.end(),
-                            0);
+                            problem.a().offset());
         return rv;
     }
 
@@ -461,7 +461,8 @@ namespace Tensile
         default:
             throw std::runtime_error("unknown formatD");
         };
-        TensorDescriptor rv(problem.d().dataType(), outputDims.begin(), outputDims.end(), 0);
+        TensorDescriptor rv(
+            problem.d().dataType(), outputDims.begin(), outputDims.end(), problem.d().offset());
         return rv;
     }
 
@@ -489,7 +490,8 @@ namespace Tensile
         default:
             throw std::runtime_error("unknown formatB");
         };
-        TensorDescriptor rv(problem.b().dataType(), filterDims.begin(), filterDims.end(), 0);
+        TensorDescriptor rv(
+            problem.b().dataType(), filterDims.begin(), filterDims.end(), problem.b().offset());
         return rv;
     }
 
