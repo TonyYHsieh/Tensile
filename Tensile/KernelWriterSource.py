@@ -1038,8 +1038,9 @@ class KernelWriterSource(KernelWriter):
     ####################################
     # apply offset
     kStr += self.endLine
-    kStr += "  D = D + offsetD;" + self.endLine
-    kStr += "  C = C + offsetC;" + self.endLine
+    if not kernel["_GlobalAccumulation"]:
+      kStr += "  D = D + offsetD;" + self.endLine
+      kStr += "  C = C + offsetC;" + self.endLine
     kStr += "  A = A + offsetA;" + self.endLine
     kStr += "  B = B + offsetB;" + self.endLine
 
