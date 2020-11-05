@@ -44,7 +44,7 @@ TEST(ContractionLibraryLoadingTest, MultipleKernels)
 
     {
         ContractionProblem p
-            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.5, false, 2);
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.5, false, 2);
 
         auto solution = library->findBestSolution(p, hardware);
 
@@ -56,7 +56,7 @@ TEST(ContractionLibraryLoadingTest, MultipleKernels)
 
     {
         ContractionProblem p
-            = ContractionProblem::GEMM(false, true, 4, 4, 4, 4, 4, 4, 1.5, false, 2);
+            = ContractionProblem::GEMM(false, true, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.5, false, 2);
 
         auto solution = library->findBestSolution(p, hardware);
 
@@ -66,7 +66,7 @@ TEST(ContractionLibraryLoadingTest, MultipleKernels)
 
     {
         ContractionProblem p
-            = ContractionProblem::GEMM(true, false, 4, 4, 4, 4, 4, 4, 1.5, false, 2);
+            = ContractionProblem::GEMM(true, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.5, false, 2);
 
         auto solution = library->findBestSolution(p, hardware);
 
@@ -76,7 +76,7 @@ TEST(ContractionLibraryLoadingTest, MultipleKernels)
 
     {
         ContractionProblem p
-            = ContractionProblem::GEMM(true, true, 4, 4, 4, 4, 4, 4, 1.5, false, 2);
+            = ContractionProblem::GEMM(true, true, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.5, false, 2);
 
         auto solution = library->findBestSolution(p, hardware);
 

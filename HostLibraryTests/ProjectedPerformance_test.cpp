@@ -98,8 +98,8 @@ TEST(ContractionPerformance, Problem1)
 
     solution->sizeMapping = sizeMapping;
 
-    auto problem
-        = ContractionProblem::GEMM(false, false, 1536, 1536, 64, 1536, 64, 1536, 1.5, false, 1.0);
+    auto problem = ContractionProblem::GEMM(
+        false, false, 1536, 1536, 64, 1536, 0, 64, 0, 1536, 0, 1.5, false, 1.0);
 
     AMDGPU hardware(Tensile::AMDGPU::Processor::gfx906, 64, "gfx906");
     double perf = solution->projectedPerformance(problem, hardware).speedGFlops;
@@ -127,8 +127,8 @@ TEST(ContractionPerformance, Problem2)
 
     solution->sizeMapping = sizeMapping;
 
-    auto problem
-        = ContractionProblem::GEMM(false, false, 384, 192, 60, 384, 60, 384, 1.5, false, 1.0);
+    auto problem = ContractionProblem::GEMM(
+        false, false, 384, 192, 60, 384, 0, 60, 0, 384, 0, 1.5, false, 1.0);
 
     AMDGPU hardware(Tensile::AMDGPU::Processor::gfx906, 64, "gfx906");
     double perf = solution->projectedPerformance(problem, hardware).speedGFlops;
@@ -156,8 +156,8 @@ TEST(ContractionPerformance, Problem3)
 
     solution->sizeMapping = sizeMapping;
 
-    auto problem
-        = ContractionProblem::GEMM(false, false, 384, 192, 60, 384, 60, 384, 1.5, false, 1.0);
+    auto problem = ContractionProblem::GEMM(
+        false, false, 384, 192, 60, 384, 0, 60, 0, 384, 0, 1.5, false, 1.0);
 
     AMDGPU hardware(Tensile::AMDGPU::Processor::gfx906, 64, "gfx906");
     auto   model = solution->projectedPerformance(problem, hardware);
@@ -189,8 +189,8 @@ TEST(ContractionPerformance, Problem4)
 
     solution->sizeMapping = sizeMapping;
 
-    auto problem
-        = ContractionProblem::GEMM(false, false, 1536, 1575, 64, 1536, 64, 1536, 1.5, false, 3.0);
+    auto problem = ContractionProblem::GEMM(
+        false, false, 1536, 1575, 64, 1536, 0, 64, 0, 1536, 0, 1.5, false, 3.0);
 
     AMDGPU hardware(Tensile::AMDGPU::Processor::gfx906, 64, "gfx906");
     auto   model = solution->projectedPerformance(problem, hardware);

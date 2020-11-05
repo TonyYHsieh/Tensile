@@ -87,7 +87,8 @@ TEST(LLVMYAMLContractionTest, Predicate)
     yin >> p;
     ASSERT_FALSE(yin.error());
 
-    ContractionProblem prob = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1, false, 1);
+    ContractionProblem prob
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1, false, 1);
 
     EXPECT_NE(p, nullptr);
 

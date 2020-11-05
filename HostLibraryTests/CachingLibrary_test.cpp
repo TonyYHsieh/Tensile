@@ -107,10 +107,14 @@ TEST(Hashing, ContractionProblem)
     using namespace Tensile;
 
     // Test sizes
-    ContractionProblem a = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 5, 5, 3.0, false, 5);
-    ContractionProblem b = ContractionProblem::GEMM(false, true, 5, 7, 9, 7, 5, 5, 3.0, false, 5);
-    ContractionProblem c = ContractionProblem::GEMM(false, true, 5, 7, 9, 0, 5, 5, 3.0, false, 5);
-    ContractionProblem d = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 5, 5, 3.0, false, 5);
+    ContractionProblem a
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 0, 5, 0, 5, 0, 3.0, false, 5);
+    ContractionProblem b
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 7, 0, 5, 0, 5, 0, 3.0, false, 5);
+    ContractionProblem c
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 0, 0, 5, 0, 5, 0, 3.0, false, 5);
+    ContractionProblem d
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 0, 5, 0, 5, 0, 3.0, false, 5);
 
     EXPECT_NE(std::hash<ContractionProblem>()(a), std::hash<ContractionProblem>()(b));
     EXPECT_NE(std::hash<ContractionProblem>()(a), std::hash<ContractionProblem>()(c));
@@ -118,7 +122,8 @@ TEST(Hashing, ContractionProblem)
     EXPECT_EQ(std::hash<ContractionProblem>()(a), std::hash<ContractionProblem>()(d));
 
     // Test high precision accumulate flag
-    ContractionProblem e = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 5, 5, 3.0, false, 5);
+    ContractionProblem e
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 0, 5, 0, 5, 0, 3.0, false, 5);
     ContractionProblem f = e;
 
     e.setHighPrecisionAccumulate(false);
@@ -134,7 +139,8 @@ TEST(Hashing, ContractionProblem)
     EXPECT_EQ(std::hash<ContractionProblem>()(e), std::hash<ContractionProblem>()(f));
 
     // Test kernel language flag
-    ContractionProblem g = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 5, 5, 3.0, false, 5);
+    ContractionProblem g
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 0, 5, 0, 5, 0, 3.0, false, 5);
     ContractionProblem h = g;
     g.setKernelLanguage(KernelLanguage::Any);
     h.setKernelLanguage(KernelLanguage::Source);
@@ -161,7 +167,8 @@ TEST(Hashing, ContractionProblem)
     EXPECT_EQ(std::hash<ContractionProblem>()(g), std::hash<ContractionProblem>()(h));
 
     // Test deterministic mode flag
-    ContractionProblem i = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 5, 5, 3.0, false, 5);
+    ContractionProblem i
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 0, 5, 0, 5, 0, 3.0, false, 5);
     ContractionProblem j = i;
 
     i.setDeterministicMode(true);
@@ -177,7 +184,8 @@ TEST(Hashing, ContractionProblem)
     EXPECT_EQ(std::hash<ContractionProblem>()(i), std::hash<ContractionProblem>()(j));
 
     // Test arithmetic unit flag
-    ContractionProblem k = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 5, 5, 3.0, false, 5);
+    ContractionProblem k
+        = ContractionProblem::GEMM(false, true, 5, 7, 9, 5, 0, 5, 0, 5, 0, 3.0, false, 5);
     ContractionProblem l = k;
 
     k.setArithmeticUnit(ArithmeticUnit::Any);
@@ -285,10 +293,13 @@ TEST(CachingLibrary, Simple)
 
     AMDGPU gpu;
 
-    auto Problem0 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-    auto Problem1 = ContractionProblem::GEMM(false, false, 6, 6, 6, 6, 6, 6, 1.2, false, 1);
-    auto Problem2 = ContractionProblem::GEMM(true, false, 14, 4, 4, 4, 4, 4, 1.2, false, 1);
-    auto Problem3 = ContractionProblem::GEMM(true, true, 24, 4, 4, 4, 4, 4, 1.2, false, 1);
+    auto Problem0
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+    auto Problem1
+        = ContractionProblem::GEMM(false, false, 6, 6, 6, 6, 0, 6, 0, 6, 0, 1.2, false, 1);
+    auto Problem2
+        = ContractionProblem::GEMM(true, false, 14, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+    auto Problem3 = ContractionProblem::GEMM(true, true, 24, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
 
     using Key = std::array<int64_t, 4>;
     using Table
@@ -426,8 +437,10 @@ TEST(CachingLibrary, FlagsDiff)
         auto Library0 = std::make_shared<SingleContractionLibrary>(Solution0);
         auto Library1 = std::make_shared<SingleContractionLibrary>(Solution1);
 
-        auto Problem0 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem1 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
+        auto Problem0
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem1
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
 
         Problem0.setHighPrecisionAccumulate(true);
         Problem1.setHighPrecisionAccumulate(false);
@@ -491,9 +504,12 @@ TEST(CachingLibrary, FlagsDiff)
         auto Library1 = std::make_shared<SingleContractionLibrary>(Solution1);
         auto Library2 = std::make_shared<SingleContractionLibrary>(Solution2);
 
-        auto Problem0 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem1 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem2 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
+        auto Problem0
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem1
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem2
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
 
         Problem0.setKernelLanguage(KernelLanguage::Assembly);
         Problem1.setKernelLanguage(KernelLanguage::Source);
@@ -557,8 +573,10 @@ TEST(CachingLibrary, FlagsDiff)
         auto Library0 = std::make_shared<SingleContractionLibrary>(Solution0);
         auto Library1 = std::make_shared<SingleContractionLibrary>(Solution1);
 
-        auto Problem0 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem1 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
+        auto Problem0
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem1
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
 
         Problem0.setDeterministicMode(true);
         Problem1.setDeterministicMode(false);
@@ -622,9 +640,12 @@ TEST(CachingLibrary, FlagsDiff)
         auto Library1 = std::make_shared<SingleContractionLibrary>(Solution1);
         auto Library2 = std::make_shared<SingleContractionLibrary>(Solution2);
 
-        auto Problem0 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem1 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem2 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
+        auto Problem0
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem1
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem2
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
 
         Problem0.setArithmeticUnit(ArithmeticUnit::MFMA);
         Problem1.setArithmeticUnit(ArithmeticUnit::VALU);
@@ -746,14 +767,22 @@ TEST(CachingLibrary, FlagsDiff)
         auto Library6 = std::make_shared<SingleContractionLibrary>(Solution6);
         auto Library7 = std::make_shared<SingleContractionLibrary>(Solution7);
 
-        auto Problem0 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem1 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem2 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem3 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem4 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem5 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem6 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-        auto Problem7 = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
+        auto Problem0
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem1
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem2
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem3
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem4
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem5
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem6
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+        auto Problem7
+            = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
 
         Problem0.setHighPrecisionAccumulate(true);
         Problem0.setKernelLanguage(KernelLanguage::Assembly);

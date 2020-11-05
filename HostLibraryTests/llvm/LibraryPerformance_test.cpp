@@ -220,12 +220,16 @@ TEST_P(LibraryPerformanceTest, SpecificSizes)
                                                     1,
                                                     256,
                                                     1024,
+                                                    0,
                                                     1024,
                                                     12,
+                                                    0,
                                                     256,
                                                     12,
+                                                    0,
                                                     256,
                                                     12,
+                                                    0,
                                                     2.0);
 
     auto solution = library->findBestSolution(problem, hardware);

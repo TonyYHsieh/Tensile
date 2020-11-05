@@ -142,10 +142,13 @@ TEST(ContractionSelectionLibraryTest, TransposeSelection)
 
     AMDGPU gpu;
 
-    auto NNProblem = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-    auto NTProblem = ContractionProblem::GEMM(false, true, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-    auto TNProblem = ContractionProblem::GEMM(true, false, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
-    auto TTProblem = ContractionProblem::GEMM(true, true, 4, 4, 4, 4, 4, 4, 1.2, false, 1);
+    auto NNProblem
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+    auto NTProblem
+        = ContractionProblem::GEMM(false, true, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+    auto TNProblem
+        = ContractionProblem::GEMM(true, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
+    auto TTProblem = ContractionProblem::GEMM(true, true, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1.2, false, 1);
 
     // auto WeirdProblemC = ContractionProblem::FromBLAS( true,  true, 4,4,4,
     // 4,4,4, false, false, 1); WeirdProblemC.c.transpose(0,1);

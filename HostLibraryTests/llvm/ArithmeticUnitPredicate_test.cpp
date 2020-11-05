@@ -46,7 +46,8 @@ TEST(ArithmeticUnitPredicateTest, Any)
     ASSERT_FALSE(yin.error());
     EXPECT_NE(p, nullptr);
 
-    ContractionProblem prob = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1, false, 1);
+    ContractionProblem prob
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1, false, 1);
 
     prob.setArithmeticUnit(ArithmeticUnit::Any);
     EXPECT_EQ((*p)(prob), true);
@@ -72,7 +73,8 @@ TEST(ArithmeticUnitPredicateTest, Mfma)
     ASSERT_FALSE(yin.error());
     EXPECT_NE(p, nullptr);
 
-    ContractionProblem prob = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1, false, 1);
+    ContractionProblem prob
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1, false, 1);
 
     prob.setArithmeticUnit(ArithmeticUnit::Any);
     EXPECT_EQ((*p)(prob), true);
@@ -98,7 +100,8 @@ TEST(ArithmeticUnitPredicateTest, Valu)
     ASSERT_FALSE(yin.error());
     EXPECT_NE(p, nullptr);
 
-    ContractionProblem prob = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1, false, 1);
+    ContractionProblem prob
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1, false, 1);
 
     prob.setArithmeticUnit(ArithmeticUnit::Any);
     EXPECT_EQ((*p)(prob), true);

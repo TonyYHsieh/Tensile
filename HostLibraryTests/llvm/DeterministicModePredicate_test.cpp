@@ -46,7 +46,8 @@ TEST(DeterministicModePredicateTest, ModeOn)
     ASSERT_FALSE(yin.error());
     EXPECT_NE(p, nullptr);
 
-    ContractionProblem prob = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1, false, 1);
+    ContractionProblem prob
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1, false, 1);
 
     prob.setDeterministicMode(true);
     EXPECT_EQ((*p)(prob), true);
@@ -69,7 +70,8 @@ TEST(DeterministicModePredicateTest, ModeOff)
     ASSERT_FALSE(yin.error());
     EXPECT_NE(p, nullptr);
 
-    ContractionProblem prob = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 4, 4, 1, false, 1);
+    ContractionProblem prob
+        = ContractionProblem::GEMM(false, false, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1, false, 1);
 
     prob.setDeterministicMode(true);
     EXPECT_EQ((*p)(prob), false);
