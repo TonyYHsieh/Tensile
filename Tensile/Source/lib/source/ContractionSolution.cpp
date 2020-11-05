@@ -413,11 +413,6 @@ namespace Tensile
             }
         }
 
-        rv.args.append<uint32_t>("offsetD", d.offset());
-        rv.args.append<uint32_t>("offsetC", c.offset());
-        rv.args.append<uint32_t>("offsetA", a.offset());
-        rv.args.append<uint32_t>("offsetB", b.offset());
-
         if(sizeMapping.packSummationDims)
             // boundIndices are ordered with unroll last.
             // Magic numbers for all but first are needed to unpack other dims.
@@ -550,7 +545,15 @@ namespace Tensile
             rv.args.append<uint32_t>("numFullBlocks", numFullBlocks);
             rv.args.append<uint32_t>("wgmRemainder1", wgmRemainder1);
             rv.args.append<uint32_t>("magicNumberWgmRemainder1", magicNumberWgmRemainder1);
+        }
 
+        rv.args.append<uint32_t>("offsetD", d.offset());
+        rv.args.append<uint32_t>("offsetC", c.offset());
+        rv.args.append<uint32_t>("offsetA", a.offset());
+        rv.args.append<uint32_t>("offsetB", b.offset());
+
+        if(!isSourceKernel())
+        {
             rv.args.append<uint32_t>("pad", 0);
         }
 

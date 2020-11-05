@@ -879,12 +879,6 @@ class KernelWriterSource(KernelWriter):
     for i in range(0, kernel["ProblemType"]["TotalIndices"]):
       s += "," + self.endLine + "  unsigned int size" + self.indexChars[i]
 
-    # offset
-    s += "," + self.endLine + "  unsigned int offsetD"
-    s += "," + self.endLine + "  unsigned int offsetC"
-    s += "," + self.endLine + "  unsigned int offsetA"
-    s += "," + self.endLine + "  unsigned int offsetB"
-
     for idxChar in self.magicSumChars:
       s += ",%s  unsigned magicNumberNumIter%s /*PSD*/" % (self.endLine, idxChar)
       s += ",%s  unsigned magicShiftNumIter%s /*PSD*/" % (self.endLine, idxChar)
@@ -911,7 +905,15 @@ class KernelWriterSource(KernelWriter):
     # kernel["PersistentKernel"]:
     s += "," + self.endLine + "  unsigned int problemNumGroupTiles0"
     s += "," + self.endLine + "  unsigned int problemNumGroupTiles1"
-    s += "," + self.endLine + "  unsigned int magicNumberProblemNumGroupTiles0"
+    if kernel["PersistentKernel"]:
+      s += "," + self.endLine + "  unsigned int magicNumberProblemNumGroupTiles0"
+
+    # offset
+    s += "," + self.endLine + "  unsigned int offsetD"
+    s += "," + self.endLine + "  unsigned int offsetC"
+    s += "," + self.endLine + "  unsigned int offsetA"
+    s += "," + self.endLine + "  unsigned int offsetB"
+
     s += " )"
     return s
 

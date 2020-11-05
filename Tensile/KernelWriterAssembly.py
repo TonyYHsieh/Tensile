@@ -878,11 +878,102 @@ class KernelWriterAssembly(KernelWriter):
 
     return sgprIdx
 
+
   def undefineSgpr(self, name):
     self.sgprPool.checkIn(self.sgprs[name])
     # later references will result in compile-time error (with odd 'error: expected relocatable expression')
     # and 'Kernel ... not found in any loaded module'
     return ".set %s, UNDEF\n" % name
+
+
+  def defineVariableSgprs(self, kernel):
+    #------------------------
+    # Registers defined below this point are not available in the post-loop
+    # Post-loop is after tail loop exits, ie the store code.
+    # (we reclaim them to use as temps, typically for execmasks)
+    # Mostly impacts flat kernels and GSU edge since these need SGPR
+    # for conditionals
+    # self.lastPostLoopSgpr = self.sgprPool.size()
+
+    if self.unrollIncIsDepthU:
+      # product of all summation dimensions, this also will be divided if GSU is enabled
+      self.defineSgpr("UnrollLoopLastIter", 1)
+
+    if kernel["PackSummationDims"] and kernel["GlobalSplitU"]>1:
+      self.defineSgpr("GsuNumIter%s"%self.loopChar(kernel,self.unrollIdx), 1)
+
+    for tc in ('A', 'B'):
+      for zp in kernel["ProblemType"]["ZeroPad%s"%tc]:
+        (freeDim, sumDim, padStart, padEnd) = zp
+        sumDimChar  = globalParameters["IndexChars"][sumDim]
+        # These will eventually be read as kernel args:
+        self.defineSgpr("ElementEdge%s%s"%(tc, sumDimChar),1)
+        if kernel["PackSummationDims"]:
+          self.defineSgpr("Iter%s"%(sumDimChar),1)
+
+    if kernel["FractionalLoad"] == 2:
+      if kernel["fractionalPerpOverhangA"]:
+        self.defineSgpr("PerpOverhangVccA", 2, 2)
+      if kernel["fractionalPerpOverhangB"]:
+        self.defineSgpr("PerpOverhangVccB", 2, 2)
+    if self.use64bShadowLimit:
+      # If need more SGPR could overlap this with the Tensor2dSize regs
+      self.defineSgpr("ShadowLimitA", 2, 2)
+      self.defineSgpr("ShadowLimitB", 2, 2)
+
+    if kernel["PackSummationDims"]:
+      for tc in ('A','B'):
+        self.defineSgpr("InitialSrd%sBase"%tc, 2)
+        self.defineSgpr("InitialSrd%sLimit"%tc, 2 if self.use64bShadowLimit else 1)
+
+    if self.staggerU:
+      self.defineSgpr("StaggerUIter", 1)  # stagger loop iterations, used for various iter counts in the code
+      self.defineSgpr("WrapUA", 2)  # Bytes to add to SrdA to reset address from N-1 iter to AddressA
+      self.defineSgpr("WrapUB", 2)  # Bytes to add to SrdB to reset address from N-1 iter to AddressB
+
+    if kernel["PersistentKernel"]:
+      self.defineSgpr("SerialWorkGroupIter", 1) # Track sequential persistent wg
+      # self.defineSgpr("PersistentLoopIter", 1) # Back-up: The count of current persistent loop, not needed now
+      if kernel["PersistentKernelAlongBatch"]:
+        self.defineSgpr("WGKSerial", 1)  # for persistent kernel along batch, wgK of PK-remapping
+        self.defineSgpr("WGIJSerial", 1)  # for persistent kernel along batch, wgIJ of PK-remapping
+    if self.prefetchAcrossPersistent0:
+      self.defineSgpr("PrevWorkGroup0", 1) # WorkGroup0 from prev iteration, use for stores
+      self.defineSgpr("PrevWorkGroup1", 1) # WorkGroup0 from prev iteration, use for stores
+      # self.defineSgpr("PrevWorkGroup2", 1) # WorkGroup0 from prev iteration, use for stores
+
+    self.defineSgpr("GlobalReadIncsA", self.numSgprGlobalReadIncsA)
+    self.defineSgpr("GlobalReadIncsB", self.numSgprGlobalReadIncsB)
+
+    if kernel["LocalWriteUseSgprA"]:
+        self.defineSgpr("LocalWriteAddrA", 1)
+    if kernel["LocalWriteUseSgprB"]:
+        self.defineSgpr("LocalWriteAddrB", 1)
+
+    if kernel["_UseSgprForGRO"]:
+      needFirstSgprOffset = kernel["DirectToLdsA"] and kernel["UseInstOffsetForGRO"]
+      numberOfSgpr = self.numGlobalReadOffsetsA if needFirstSgprOffset else (self.numGlobalReadOffsetsA-1)
+      self.defineSgpr("ScalarGlobalReadOffsetA", numberOfSgpr)
+
+      needFirstSgprOffset = kernel["DirectToLdsB"] and kernel["UseInstOffsetForGRO"]
+      numberOfSgpr = self.numGlobalReadOffsetsB if needFirstSgprOffset else (self.numGlobalReadOffsetsB-1)
+      self.defineSgpr("ScalarGlobalReadOffsetB", numberOfSgpr)
+
+    # debug flag to allocate dummy / unused sgpr
+    # useful when comparing code that adds new kernel arguments to see what
+    # was actually changed
+    numDummySgpr= 0
+    for i in range(numDummySgpr):
+      self.defineSgpr("DummySgpr%d"%i, 1)
+
+    if self.sgprPool.size() >= self.maxSgprs:
+      print ("warning: Number of defined SGPRS (%d) overflowed max SGPRS (%d)." \
+               % (self.sgprPool.size(), self.maxSgprs))
+
+    # TODO-persistent - likely recompute some of the registers above.
+    if kernel["PersistentKernel"]:
+      self.lastPostLoopSgpr = self.sgprPool.size()
+
 
   ##############################################################################
   # Init Kernel
@@ -1408,7 +1499,7 @@ class KernelWriterAssembly(KernelWriter):
         (self.globalReadInstructionA.blockWidth * 4)
 
     if kernel["BufferLoad"]:
-      numGlobalReadOffsetsA = roundUp(numGlobalReadInstructionsA * self.rpgo)
+      self.numGlobalReadOffsetsA = roundUp(numGlobalReadInstructionsA * self.rpgo)
     else:
       numVgprGlobalReadAddressesA = numGlobalReadInstructionsA * self.rpga
 
@@ -1418,7 +1509,7 @@ class KernelWriterAssembly(KernelWriter):
     numGlobalReadInstructionsB = (numGlobalReadsB * tPB["bpe"])// \
         (self.globalReadInstructionB.blockWidth * 4)
     if kernel["BufferLoad"]:
-      numGlobalReadOffsetsB = roundUp(numGlobalReadInstructionsB * self.rpgo)
+      self.numGlobalReadOffsetsB = roundUp(numGlobalReadInstructionsB * self.rpgo)
     else:
       numVgprGlobalReadAddressesB = numGlobalReadInstructionsB * self.rpga
     if self.globalReadIncsUseVgpr:
@@ -1520,9 +1611,9 @@ class KernelWriterAssembly(KernelWriter):
     # BufferLoad disables the gptGlobalReadAddr used in flat addressing.
     if kernel["BufferLoad"]:
        self.startVgprGlobalReadOffsetA = vgprIdx
-       vgprIdx += 1 if kernel["_UseSgprForGRO"] else numGlobalReadOffsetsA
+       vgprIdx += 1 if kernel["_UseSgprForGRO"] else self.numGlobalReadOffsetsA
        self.startVgprGlobalReadOffsetB = vgprIdx
-       vgprIdx += 1 if kernel["_UseSgprForGRO"] else numGlobalReadOffsetsB
+       vgprIdx += 1 if kernel["_UseSgprForGRO"] else self.numGlobalReadOffsetsB
 
     else:
       self.startVgprGlobalReadAddressesA = vgprIdx
@@ -1636,11 +1727,11 @@ class KernelWriterAssembly(KernelWriter):
     ####################################
     # num sgprs: global read increments
     if self.globalReadIncsUseVgpr:
-      numSgprGlobalReadIncsA = 0
-      numSgprGlobalReadIncsB = 0
+      self.numSgprGlobalReadIncsA = 0
+      self.numSgprGlobalReadIncsB = 0
     else:
-      numSgprGlobalReadIncsA = kernel["ProblemType"]["NumIndicesSummation"] * self.rpgo
-      numSgprGlobalReadIncsB = kernel["ProblemType"]["NumIndicesSummation"] * self.rpgo
+      self.numSgprGlobalReadIncsA = kernel["ProblemType"]["NumIndicesSummation"] * self.rpgo
+      self.numSgprGlobalReadIncsB = kernel["ProblemType"]["NumIndicesSummation"] * self.rpgo
 
     ########################################
     # SGPR Assignment according to AMDGPU-ABI
@@ -1758,11 +1849,6 @@ class KernelWriterAssembly(KernelWriter):
     self.defineSgpr("StridesB", self.numSgprStridesB)
     self.defineSgpr("SizesFree", self.numSgprSizesFree)
     self.defineSgpr("SizesSum", self.numSgprSizesSum)
-    self.defineSgpr("OffsetD", self.numSgprOffsetD)
-    self.defineSgpr("OffsetC", self.numSgprOffsetC)
-    self.defineSgpr("OffsetA", self.numSgprOffsetA)
-    self.defineSgpr("OffsetB", self.numSgprOffsetB)
-
 
     self.sumMagicParms = []
     if kernel["PackSummationDims"]:
@@ -1816,6 +1902,12 @@ class KernelWriterAssembly(KernelWriter):
     self.defineSgpr("NumFullBlocks", 1) # Magic number to use for div by (NumWorkGroups1 % WGM)
     self.defineSgpr("WgmRemainder1", 1) # Magic number to use for div by (NumWorkGroups1 % WGM)
     self.defineSgpr("MagicNumberWgmRemainder1", 1) # Magic number to use for div by (NumWorkGroups1 % WGM)
+
+    self.defineSgpr("OffsetD", self.numSgprOffsetD)
+    self.defineSgpr("OffsetC", self.numSgprOffsetC)
+    self.defineSgpr("OffsetA", self.numSgprOffsetA)
+    self.defineSgpr("OffsetB", self.numSgprOffsetB)
+
     self.numSgprToLoad = 2 + 2 + numSgprAddressD + numSgprAddressC + numSgprAddressA + numSgprAddressB + numSgprAlpha + \
       (numSgprBeta if kernel["ProblemType"]["UseBeta"] else 0) + self.numSgprStridesD + self.numSgprStridesC + self.numSgprStridesA + \
       self.numSgprStridesB + self.numSgprSizesFree + self.numSgprSizesSum + \
@@ -1836,94 +1928,6 @@ class KernelWriterAssembly(KernelWriter):
       self.sgprPool.checkIn(tempSgpr)
     if not self.staggerU:
       self.undefineSgpr("OrigStaggerUIter")  # Original stagger register.  Only needed for Persistent
-
-    #------------------------
-    # Registers defined below this point are not available in the post-loop
-    # Post-loop is after tail loop exits, ie the store code.
-    # (we reclaim them to use as temps, typically for execmasks)
-    # Mostly impacts flat kernels and GSU edge since these need SGPR
-    # for conditionals
-    # self.lastPostLoopSgpr = self.sgprPool.size()
-
-    if self.unrollIncIsDepthU:
-      # product of all summation dimensions, this also will be divided if GSU is enabled
-      self.defineSgpr("UnrollLoopLastIter", 1)
-
-    if kernel["PackSummationDims"] and kernel["GlobalSplitU"]>1:
-      self.defineSgpr("GsuNumIter%s"%self.loopChar(kernel,self.unrollIdx), 1)
-
-    for tc in ('A', 'B'):
-      for zp in kernel["ProblemType"]["ZeroPad%s"%tc]:
-        (freeDim, sumDim, padStart, padEnd) = zp
-        freeDimChar = globalParameters["IndexChars"][freeDim]
-        sumDimChar  = globalParameters["IndexChars"][sumDim]
-        # These will eventually be read as kernel args:
-        self.defineSgpr("ElementEdge%s%s"%(tc, sumDimChar),1)
-        if kernel["PackSummationDims"]:
-          self.defineSgpr("Iter%s"%(sumDimChar),1)
-
-    if kernel["FractionalLoad"] == 2:
-      if kernel["fractionalPerpOverhangA"]:
-        self.defineSgpr("PerpOverhangVccA", 2, 2)
-      if kernel["fractionalPerpOverhangB"]:
-        self.defineSgpr("PerpOverhangVccB", 2, 2)
-    if self.use64bShadowLimit:
-      # If need more SGPR could overlap this with the Tensor2dSize regs
-      self.defineSgpr("ShadowLimitA", 2, 2)
-      self.defineSgpr("ShadowLimitB", 2, 2)
-
-    if kernel["PackSummationDims"]:
-      for tc in ('A','B'):
-        self.defineSgpr("InitialSrd%sBase"%tc, 2)
-        self.defineSgpr("InitialSrd%sLimit"%tc, 2 if self.use64bShadowLimit else 1)
-
-    if self.staggerU:
-      self.defineSgpr("StaggerUIter", 1)  # stagger loop iterations, used for various iter counts in the code
-      self.defineSgpr("WrapUA", 2)  # Bytes to add to SrdA to reset address from N-1 iter to AddressA
-      self.defineSgpr("WrapUB", 2)  # Bytes to add to SrdB to reset address from N-1 iter to AddressB
-
-    if kernel["PersistentKernel"]:
-      self.defineSgpr("SerialWorkGroupIter", 1) # Track sequential persistent wg
-      # self.defineSgpr("PersistentLoopIter", 1) # Back-up: The count of current persistent loop, not needed now
-      if kernel["PersistentKernelAlongBatch"]:
-        self.defineSgpr("WGKSerial", 1)  # for persistent kernel along batch, wgK of PK-remapping
-        self.defineSgpr("WGIJSerial", 1)  # for persistent kernel along batch, wgIJ of PK-remapping
-    if self.prefetchAcrossPersistent0:
-      self.defineSgpr("PrevWorkGroup0", 1) # WorkGroup0 from prev iteration, use for stores
-      self.defineSgpr("PrevWorkGroup1", 1) # WorkGroup0 from prev iteration, use for stores
-      # self.defineSgpr("PrevWorkGroup2", 1) # WorkGroup0 from prev iteration, use for stores
-
-    self.defineSgpr("GlobalReadIncsA", numSgprGlobalReadIncsA)
-    self.defineSgpr("GlobalReadIncsB", numSgprGlobalReadIncsB)
-
-    if kernel["LocalWriteUseSgprA"]:
-        self.defineSgpr("LocalWriteAddrA", 1)
-    if kernel["LocalWriteUseSgprB"]:
-        self.defineSgpr("LocalWriteAddrB", 1)
-
-    if kernel["_UseSgprForGRO"]:
-      needFirstSgprOffset = kernel["DirectToLdsA"] and kernel["UseInstOffsetForGRO"]
-      numberOfSgpr = numGlobalReadOffsetsA if needFirstSgprOffset else (numGlobalReadOffsetsA-1)
-      self.defineSgpr("ScalarGlobalReadOffsetA", numberOfSgpr)
-
-      needFirstSgprOffset = kernel["DirectToLdsB"] and kernel["UseInstOffsetForGRO"]
-      numberOfSgpr = numGlobalReadOffsetsB if needFirstSgprOffset else (numGlobalReadOffsetsB-1)
-      self.defineSgpr("ScalarGlobalReadOffsetB", numberOfSgpr)
-
-    # debug flag to allocate dummy / unused sgpr
-    # useful when comparing code that adds new kernel arguments to see what
-    # was actually changed
-    numDummySgpr= 0
-    for i in range(numDummySgpr):
-      self.defineSgpr("DummySgpr%d"%i, 1)
-
-    if self.sgprPool.size() >= self.maxSgprs:
-      print ("warning: Number of defined SGPRS (%d) overflowed max SGPRS (%d)." \
-               % (self.sgprPool.size(), self.maxSgprs))
-
-    # TODO-persistent - likely recompute some of the registers above.
-    if kernel["PersistentKernel"]:
-      self.lastPostLoopSgpr = self.sgprPool.size()
 
     ########################################
     # AGPR Allocation
@@ -3105,6 +3109,14 @@ class KernelWriterAssembly(KernelWriter):
     kStr += inst("s_lshl_b32", sgpr("OffsetB"), sgpr("OffsetB"), hex(log2(self.bpeAB)), "elements offset to bytes offset")
     kStr += inst("s_add_u32",  sgpr("AddressB+0"), sgpr("AddressB+0"), sgpr("OffsetB"), "add offset to buffer address")
     kStr += inst("s_addc_u32", sgpr("AddressB+1"), sgpr("AddressB+1"), 0, "add offset to buffer address")
+
+    # undefine Offset sgpr
+    kStr += self.undefineSgpr("OffsetD")
+    kStr += self.undefineSgpr("OffsetC")
+    kStr += self.undefineSgpr("OffsetA")
+    kStr += self.undefineSgpr("OffsetB")
+
+    self.defineVariableSgprs(kernel)
 
     # Check alpha == 0, is done before kernel body
     # so if alpha/beta=Half, they haven't been converted to f32
