@@ -351,13 +351,27 @@ namespace Tensile
             rv.args.append<void const*>("ws", inputs.ws);
             rv.args.append<void const*>("ws", inputs.ws);
         }
-        else
+        else if(problemType.stridedBatched)
         {
             rv.args.append<typename TypedInputs::DType const*>("d", inputs.d);
             rv.args.append<typename TypedInputs::CType const*>("c", inputs.c);
         }
-        rv.args.append<typename TypedInputs::AType const*>("a", inputs.a);
-        rv.args.append<typename TypedInputs::BType const*>("b", inputs.b);
+        else
+        {
+            rv.args.append<typename TypedInputs::DType const* const*>("batchD", inputs.batchD);
+            rv.args.append<typename TypedInputs::CType const* const*>("batchC", inputs.batchC);
+        }
+
+        if(problemType.stridedBatched)
+        {
+            rv.args.append<typename TypedInputs::AType const*>("a", inputs.a);
+            rv.args.append<typename TypedInputs::BType const*>("b", inputs.b);
+        }
+        else
+        {
+            rv.args.append<typename TypedInputs::AType const* const*>("batchA", inputs.batchA);
+            rv.args.append<typename TypedInputs::BType const* const*>("batchB", inputs.batchB);
+        }
 
         rv.args.append<typename TypedInputs::AlphaType>("alpha", inputs.alpha);
         if(std::is_same<typename TypedInputs::AlphaType, Half>::value && !isSourceKernel())
@@ -765,7 +779,9 @@ namespace Tensile
 
         // Check for nullptrs if alpha is non-zero.
         if((inputs.alpha != static_cast<typename TypedInputs::AlphaType>(0) /*&& k!=0*/)
-           && (inputs.a == nullptr || inputs.b == nullptr))
+           && ((problem.stridedBatched() && (inputs.a == nullptr || inputs.b == nullptr))
+               || (!problem.stridedBatched()
+                   && (inputs.batchA == nullptr || inputs.batchB == nullptr))))
         {
             std::string matrixID = inputs.a == nullptr ? "A" : "B";
             std::string msg      = std::string("Unsupported nullptr for ") + matrixID

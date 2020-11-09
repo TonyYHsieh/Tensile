@@ -837,17 +837,18 @@ class KernelWriterSource(KernelWriter):
       restrictStr = "__restrict__"
     ptrStr = kernel["ProblemType"]["DestDataType"].toDevice(self.language) \
         if not kernel["_GlobalAccumulation"] else "float"
-    s += "  " + globalStr + ptrStr + " *D,"
+    ptrStr  += ("" if kernel["ProblemType"]["StridedBatched"] else "*")
+    batchStr = ("" if kernel["ProblemType"]["StridedBatched"] else "Batch")
+    s += "  " + globalStr + ptrStr + " *"+ batchStr + "D,"
     s += self.endLine
-    s += "  " + globalStr + ptrStr \
-        + " const * " + restrictStr + " C,"
+    s += "  " + globalStr + ptrStr + " const * " + restrictStr + " " + batchStr + "C,"
     s += self.endLine
-    ptrStr = kernel["ProblemType"]["DataType"].toDevice(self.language)
-    s += "  " + globalStr + ptrStr \
-        + " const * " + restrictStr + " A,"
+
+    ptrStr  = kernel["ProblemType"]["DataType"].toDevice(self.language)
+    ptrStr += ("" if kernel["ProblemType"]["StridedBatched"] else "*")
+    s += "  " + globalStr + ptrStr + " const * " + restrictStr + " " + batchStr + "A,"
     s += self.endLine
-    s += "  " + globalStr + ptrStr \
-        + " const * " + restrictStr + " B"
+    s += "  " + globalStr + ptrStr + " const * " + restrictStr + " " + batchStr + "B"
 
     # alpha & beta
     s += "," + self.endLine + "  " \
@@ -1293,6 +1294,15 @@ class KernelWriterSource(KernelWriter):
           index2 = nonTileFreeIndices[j]
           kStr += " / size" + self.indexChars[index2]
         kStr += " ) % size" + self.indexChars[index] + ";" + self.endLine
+
+      if not kernel["ProblemType"]["StridedBatched"]:
+        batchStride = "1"
+        kStr += "  unsigned int wg = 0"
+        for index in nonTileFreeIndices:
+          kStr += " + wg%s * %s" % (self.indexChars[index], batchStride)
+          batchStride = "size%s" % self.indexChars[index]
+        kStr += ";%s" % self.endLine
+
     return kStr
 
   ##############################################################################
@@ -1481,7 +1491,10 @@ class KernelWriterSource(KernelWriter):
                           (sPara if tP["tlu"] else sPerp) )
                   else:
                     # just a non-vector group index
-                    kStr += "wg" + self.indexChars[index]
+                    if kernel["ProblemType"]["StridedBatched"]:
+                      kStr += "wg" + self.indexChars[index]
+                    else:
+                      kStr += "0"
               else: # summation index
                 if index == kernel["ProblemType"]["IndexUnroll"]:
                   kStr += "(globalReadOffset%s%s_%u_%u)" \
@@ -1531,6 +1544,11 @@ class KernelWriterSource(KernelWriter):
   ##############################################################################
   def graAddresses(self, kernel, tP):
     kStr = ""
+
+    if not kernel["ProblemType"]["StridedBatched"]:
+      kStr += "  DATA_TYPE const* %s = Batch%s[wg];" % (tP["tensorChar"], tP["tensorChar"])
+      kStr += self.endLine
+
     for perp in range(0, tP["nrp"]):
       for sPerp in range(0, tP["nrpv"]):
         for para in range(0, tP["nrc"]):
@@ -2905,17 +2923,18 @@ class KernelWriterSource(KernelWriter):
             % (self.indexChars[index1], self.tileChar1, self.tileChar0, self.endLine)
 
     for i in range(0, kernel["ProblemType"]["NumIndicesC"]):
-        kStr += "  unsigned int globalC%s = " % self.indexChars[i]
-        if i == index0 and len(kernel["PackedC0IndicesX"])==1:
-          kStr += "flattenedGlobalC0;"
-        elif i == index1 and len(kernel["PackedC1IndicesX"])==1:
-          kStr += "flattenedGlobalC1;"
-        elif isPackedIndex(kernel,i):
-          kStr += "0; // will be set below"
-        else:
-          #kStr += "printf(\"pre: serial:%%u wg0:%%u wg1:%%u globalC0I:%%u globalC1J:%%u\\n\", serial, wg0I, wg1J, globalC0I, globalC1J);%s" % (self.endLine)
-          kStr += "(wg%s);" % (self.indexChars[i])
-        kStr += "%s" % self.endLine
+      kStr += "  unsigned int globalC%s = " % self.indexChars[i]
+      if i == index0 and len(kernel["PackedC0IndicesX"]) == 1:
+        kStr += "flattenedGlobalC0;"
+      elif i == index1 and len(kernel["PackedC1IndicesX"]) == 1:
+        kStr += "flattenedGlobalC1;"
+      elif isPackedIndex(kernel,i):
+        kStr += "0; // will be set below"
+      elif kernel["ProblemType"]["StridedBatched"]:
+        kStr += "(wg%s);" % (self.indexChars[i])
+      else:
+        kStr += "0;"
+      kStr += "%s" % self.endLine
 
     if kernel["_GlobalAccumulation"] == 'MultipleBuffer':
       indexChar = self.indexChars[0]
@@ -2927,6 +2946,14 @@ class KernelWriterSource(KernelWriter):
         indexChar = self.indexChars[i]
         kStr += " + (size%s - 1) * %s" % (indexChar, strideStr)
       kStr += ";" + self.endLine
+
+    if not kernel["ProblemType"]["StridedBatched"]:
+      ptrStr = kernel["ProblemType"]["DestDataType"].toDevice(self.language) \
+          if not kernel["_GlobalAccumulation"] else "float"
+      kStr += "  " + ptrStr + " *D = BatchD[wg];"
+      kStr += self.endLine
+      kStr += "  " + ptrStr + " const* C = BatchC[wg];"
+      kStr += self.endLine
 
     return kStr
 

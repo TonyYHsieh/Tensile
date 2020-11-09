@@ -350,6 +350,7 @@ namespace Tensile
         {
             return m_problemSizes;
         }
+
         std::vector<size_t> const& problemStrides() const
         {
             return m_problemStrides;
@@ -359,6 +360,7 @@ namespace Tensile
         {
             m_alphaType = type;
         }
+
         DataType alphaType() const
         {
             return m_alphaType;
@@ -368,15 +370,27 @@ namespace Tensile
         {
             m_betaType = type;
         }
+
         DataType betaType() const
         {
             return m_betaType;
+        }
+
+        void setStridedBatched(bool value)
+        {
+            m_stridedBatched = value;
+        }
+
+        bool stridedBatched() const
+        {
+            return m_stridedBatched;
         }
 
         void setHighPrecisionAccumulate(bool value)
         {
             m_highPrecisionAccumulate = value;
         }
+
         bool highPrecisionAccumulate() const
         {
             return m_highPrecisionAccumulate;
@@ -584,6 +598,7 @@ namespace Tensile
 
         bool           m_transA;
         bool           m_transB;
+        bool           m_stridedBatched          = true;
         bool           m_highPrecisionAccumulate = false;
         bool           m_deterministicMode       = false;
         bool           m_eligibleForPK           = true;
@@ -675,20 +690,30 @@ namespace Tensile
         using BetaType  = Beta;
 
         TypedContractionInputs();
-        TypedContractionInputs(A const* _a,
-                               B const* _b,
-                               C const* _c,
-                               D*       _d,
-                               Alpha    _alpha,
-                               Beta     _beta,
-                               void*    _ws = nullptr);
+        TypedContractionInputs(A const*  _a,
+                               B const*  _b,
+                               C const*  _c,
+                               D*        _d,
+                               A* const* _batchA,
+                               B* const* _batchB,
+                               C* const* _batchC,
+                               D**       _batchD,
+                               Alpha     _alpha,
+                               Beta      _beta,
+                               void*     _ws = nullptr);
         ~TypedContractionInputs();
 
-        A const* a  = nullptr;
-        B const* b  = nullptr;
-        C const* c  = nullptr;
-        D*       d  = nullptr;
-        void*    ws = nullptr;
+        A const* a = nullptr;
+        B const* b = nullptr;
+        C const* c = nullptr;
+        D*       d = nullptr;
+
+        A const* const* batchA = nullptr;
+        B const* const* batchB = nullptr;
+        C const* const* batchC = nullptr;
+        D**             batchD = nullptr;
+
+        void* ws = nullptr;
 
         Alpha alpha = static_cast<Alpha>(0);
         Beta  beta  = static_cast<Beta>(0);

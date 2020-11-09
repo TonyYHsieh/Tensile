@@ -1169,6 +1169,10 @@ class ProblemType(collections.abc.Mapping):
     if self["ComplexConjugateB"]:
       name += "C"
 
+    # precision and other
+    # name += "_SB" if self["StridedBatched"] else "_GB"
+    name += "" if self["StridedBatched"] else "_GB" # legacy
+
     # DataTypes
     name += "_"
     name += self["DataType"].toChar() # Type of A/B
