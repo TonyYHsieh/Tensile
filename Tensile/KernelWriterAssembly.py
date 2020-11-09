@@ -3103,6 +3103,7 @@ class KernelWriterAssembly(KernelWriter):
 
       if not kernel["ProblemType"]["StridedBatched"]:
         tmpSgpr = self.getTmpSgpr(1).idx()
+        kStr += self.endLine
         kStr += inst("s_mul_i32", sgpr(tmpSgpr), sgpr("WorkGroup2"), 0x8, "offset of global buffer address")
         kStr += inst("s_load_dwordx2", sgpr("AddressA", 2), sgpr("AddressA",2), sgpr(tmpSgpr), "load global buffer A address")
         kStr += inst("s_load_dwordx2", sgpr("AddressB", 2), sgpr("AddressB",2), sgpr(tmpSgpr), "load global buffer B address")
@@ -3132,6 +3133,7 @@ class KernelWriterAssembly(KernelWriter):
     kStr += inst("s_addc_u32", sgpr("AddressB+1"), sgpr("AddressB+1"), 0, "add offset to buffer address")
 
     # undefine Offset sgpr
+    kStr += self.endLine
     kStr += self.undefineSgpr("OffsetD")
     kStr += self.undefineSgpr("OffsetC")
     kStr += self.undefineSgpr("OffsetA")

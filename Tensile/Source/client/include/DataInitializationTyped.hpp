@@ -251,6 +251,11 @@ namespace Tensile
                 std::vector<size_t> batchIdxC(batchIdxs.size(), 0);
                 std::vector<size_t> batchIdxD(batchIdxs.size(), 0);
 
+                ptrdiff_t aPadding = 0;
+                ptrdiff_t bPadding = 0;
+                ptrdiff_t cPadding = 0;
+                ptrdiff_t dPadding = 0;
+
                 for(size_t i = 0; i < batchIdxs.size(); i++)
                 {
                     batchIdxA[i] = batchIdxs[i].a;
@@ -259,14 +264,37 @@ namespace Tensile
                     batchIdxD[i] = batchIdxs[i].d;
                 }
 
-                initGPUBatchedInput(
-                    inputs.managedA.get(), inputs.managedBatchA.get(), problem.a(), batchIdxA);
-                initGPUBatchedInput(
-                    inputs.managedB.get(), inputs.managedBatchB.get(), problem.b(), batchIdxB);
-                initGPUBatchedInput(
-                    inputs.managedC.get(), inputs.managedBatchC.get(), problem.c(), batchIdxC);
-                initGPUBatchedInput(
-                    inputs.managedD.get(), inputs.managedBatchD.get(), problem.d(), batchIdxD);
+                if(m_curBoundsCheck == BoundsCheckMode::NaN)
+                {
+                    aPadding = (inputs.aElements - problem.a().totalAllocatedElements()) / 2;
+                    bPadding = (inputs.bElements - problem.b().totalAllocatedElements()) / 2;
+                    cPadding = (inputs.cElements - problem.c().totalAllocatedElements()) / 2;
+                    dPadding = (inputs.dElements - problem.d().totalAllocatedElements()) / 2;
+                }
+                else if(m_curBoundsCheck == BoundsCheckMode::GuardPageBack)
+                {
+                    aPadding = inputs.aElements - problem.a().totalAllocatedElements();
+                    bPadding = inputs.bElements - problem.b().totalAllocatedElements();
+                    cPadding = inputs.cElements - problem.c().totalAllocatedElements();
+                    dPadding = inputs.dElements - problem.d().totalAllocatedElements();
+                }
+
+                initGPUBatchedInput(inputs.managedA.get() + aPadding,
+                                    inputs.managedBatchA.get(),
+                                    problem.a(),
+                                    batchIdxA);
+                initGPUBatchedInput(inputs.managedB.get() + bPadding,
+                                    inputs.managedBatchB.get(),
+                                    problem.b(),
+                                    batchIdxB);
+                initGPUBatchedInput(inputs.managedC.get() + cPadding,
+                                    inputs.managedBatchC.get(),
+                                    problem.c(),
+                                    batchIdxC);
+                initGPUBatchedInput(inputs.managedD.get() + dPadding,
+                                    inputs.managedBatchD.get(),
+                                    problem.d(),
+                                    batchIdxD);
             }
 
             std::shared_ptr<ManagedInputs> prepareGPUInputsTyped(ContractionProblem const& problem)
@@ -497,7 +525,6 @@ namespace Tensile
                     a       = allocNewGPUBuffer<AType>("a",
                                                  TypeInfo<AType>::ElementSize * m_aMaxElements);
                     batch_a = allocNewGPUBuffer<AType*>("batchA", sizeof(AType*) * m_maxBatch);
-
 
                     if(enableGuardPage)
                     {
