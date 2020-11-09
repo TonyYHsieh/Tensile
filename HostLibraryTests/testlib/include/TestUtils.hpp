@@ -244,12 +244,16 @@ namespace Tensile
                                                 batchCount,
                                                 lda,
                                                 strideA,
+                                                0,
                                                 ldb,
                                                 strideB,
+                                                0,
                                                 ldc,
                                                 strideC,
+                                                0,
                                                 ldd,
                                                 strideD,
+                                                0,
                                                 beta);
     }
 } // namespace Tensile

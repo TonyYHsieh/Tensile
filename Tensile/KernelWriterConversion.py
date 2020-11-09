@@ -63,6 +63,10 @@ class KernelWriterConversion(KernelWriterBase):
     for i in range(0, self.state["ProblemType"]["NumIndicesC"]):
       kStr += "  unsigned int const size%s,%s" % (self.indexChars[i], self.endLine)
 
+    # offset
+    kStr += "  unsigned int offsetD,%s" % self.endLine
+    kStr += "  unsigned int offsetC,%s" % self.endLine
+
     # gsu
     kStr += "  unsigned int const gsu)%s" % self.endLine
 
@@ -136,6 +140,7 @@ class KernelWriterConversion(KernelWriterBase):
     kStr += "))%s" % self.endLine
     kStr += "    return;%s" % self.endLine
 
+    kStr += self.endLine
     kStr += "  uint64_t id0"
     for i in range(1, problemType["NumIndicesC"]):
       kStr += ", id%d" % i
@@ -145,10 +150,15 @@ class KernelWriterConversion(KernelWriterBase):
       kStr += "  id%d = id %% size%s;%s" % (i, self.indexChars[i], self.endLine)
       kStr += "  id  = id / size%s;%s" % (self.indexChars[i], self.endLine)
 
+    ########################################
+    # apply offset
     kStr += self.endLine
+    kStr += "  D = D + offsetD;" + self.endLine
+    kStr += "  C = C + offsetC;" + self.endLine
 
     ########################################
     # D index
+    kStr += self.endLine
     kStr += "  %s idxD = GLOBAL_D( (%s)" % (self.uint64Str, self.uint64Str)
     kStr += ', '.join(["id%d" % i for i in range(problemType["NumIndicesC"])])
     kStr += ");%s" % (self.endLine)

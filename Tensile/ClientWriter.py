@@ -619,6 +619,11 @@ def writeClientConfigIni(problemSizes, problemType, sourceDir, codeObjectFiles, 
 
         param("c-equal-d",                globalParameters["CEqualD"])
 
+        param("offset-a",                 globalParameters["BufferOffsetA"])
+        param("offset-b",                 globalParameters["BufferOffsetA"])
+        param("offset-c",                 globalParameters["BufferOffsetA"])
+        param("offset-d",                 globalParameters["BufferOffsetA"])
+
         if globalParameters["PrintTensorA"]:
           param("print-tensor-a",         1)
         if globalParameters["PrintTensorB"]:
