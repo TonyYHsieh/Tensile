@@ -2386,9 +2386,8 @@ class Solution:
     dataType = state["ProblemType"]["DataType"]
     state["_GlobalAccumulation"] = None
     if ((dataType.isBFloat16() or dataType.isHalf())
-        and state["ProblemType"]["HighPrecisionAccumulate"] \
-        and state["GlobalSplitU"] > 1 \
-        and (state["EnableMatrixInstruction"] or state["KernelLanguage"] == "Source")):
+        and state["ProblemType"]["HighPrecisionAccumulate"]
+        and state["GlobalSplitU"] > 1):
       if state["GlobalSplitUAlgorithm"] == "SingleBuffer":
         state["_GlobalAccumulation"] = 'SingleBuffer'
       if state["GlobalSplitUAlgorithm"] == "MultipleBuffer":

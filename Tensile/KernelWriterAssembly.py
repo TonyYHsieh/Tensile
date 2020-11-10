@@ -3105,10 +3105,11 @@ class KernelWriterAssembly(KernelWriter):
         tmpSgpr = self.getTmpSgpr(1).idx()
         kStr += self.endLine
         kStr += inst("s_mul_i32", sgpr(tmpSgpr), sgpr("WorkGroup2"), 0x8, "offset of global buffer address")
+        if not kernel["_GlobalAccumulation"]:
+          kStr += inst("s_load_dwordx2", sgpr("AddressD", 2), sgpr("AddressD",2), sgpr(tmpSgpr), "load global buffer D address")
+          kStr += inst("s_load_dwordx2", sgpr("AddressC", 2), sgpr("AddressC",2), sgpr(tmpSgpr), "load global buffer C address")
         kStr += inst("s_load_dwordx2", sgpr("AddressA", 2), sgpr("AddressA",2), sgpr(tmpSgpr), "load global buffer A address")
         kStr += inst("s_load_dwordx2", sgpr("AddressB", 2), sgpr("AddressB",2), sgpr(tmpSgpr), "load global buffer B address")
-        kStr += inst("s_load_dwordx2", sgpr("AddressC", 2), sgpr("AddressC",2), sgpr(tmpSgpr), "load global buffer C address")
-        kStr += inst("s_load_dwordx2", sgpr("AddressD", 2), sgpr("AddressD",2), sgpr(tmpSgpr), "load global buffer D address")
         kStr += inst("s_waitcnt", "lgkmcnt(0)", "wait global buffer adress ready")
     else:
       kStr += ".if 0\n"
@@ -8580,8 +8581,9 @@ class KernelWriterAssembly(KernelWriter):
         addToSrd = True
       elif not isPackedIndex(kernel, i):
         # group index, this is higher-order Tensor dimension, just add to SRD base:
-        coord = sgpr("WorkGroup2") if kernel["ProblemType"]["StridedBatched"] else None
-        addToSrd = True if kernel["ProblemType"]["StridedBatched"] else False
+        isStridedBuffer = kernel["ProblemType"]["StridedBatched"] or kernel["_GlobalAccumulation"]
+        coord = sgpr("WorkGroup2") if isStridedBuffer else None
+        addToSrd = True if isStridedBuffer else False
       else:
         # could be packed higher-order index, just ignore
         coord = None

@@ -619,9 +619,15 @@ namespace Tensile
 
         if(sizeMapping.globalAccumulation)
             rv.args.append<void*>("WS", inputs.ws);
-        else
+        else if(problemType.stridedBatched)
             rv.args.append<typename TypedInputs::DType*>("D", inputs.d);
-        rv.args.append<typename TypedInputs::CType const*>("C", inputs.c);
+        else
+            rv.args.append<typename TypedInputs::DType const* const*>("batchD", inputs.batchD);
+
+        if(problemType.stridedBatched)
+            rv.args.append<typename TypedInputs::CType const*>("C", inputs.c);
+        else
+            rv.args.append<typename TypedInputs::CType const* const*>("batchC", inputs.batchC);
 
         if(sizeMapping.globalAccumulation)
         {
@@ -666,6 +672,11 @@ namespace Tensile
     {
         std::string name = concatenate(
             "C", problem.cNames(), "_", TypeInfo<typename TypedInputs::DType>::Abbrev());
+
+        if(!problemType.stridedBatched)
+        {
+            name += "_GB";
+        }
 
         if(sizeMapping.globalAccumulation)
         {
@@ -712,9 +723,17 @@ namespace Tensile
         rv.numWorkItems.y = rv.workGroupSize.y * rv.numWorkGroups.y;
         rv.numWorkItems.z = rv.workGroupSize.z * rv.numWorkGroups.z;
 
-        rv.args.append<typename TypedInputs::DType*>("D", inputs.d);
+        if(problemType.stridedBatched)
+            rv.args.append<typename TypedInputs::DType*>("D", inputs.d);
+        else
+            rv.args.append<typename TypedInputs::DType const* const*>("batchD", inputs.batchD);
+
         rv.args.append<void*>("WS", inputs.ws);
-        rv.args.append<typename TypedInputs::CType const*>("c", inputs.c);
+
+        if(problemType.stridedBatched)
+            rv.args.append<typename TypedInputs::CType const*>("C", inputs.c);
+        else
+            rv.args.append<typename TypedInputs::CType const* const*>("batchC", inputs.batchC);
 
         if(sizeMapping.globalAccumulation == 2)
             rv.args.append<typename TypedInputs::AlphaType>("alpha", inputs.alpha);
@@ -764,6 +783,11 @@ namespace Tensile
     {
         std::string name = concatenate(
             "C", problem.cNames(), "_", TypeInfo<typename TypedInputs::DType>::Abbrev());
+
+        if(!problemType.stridedBatched)
+        {
+            name += "_GB";
+        }
 
         name += "_PostGSU";
 

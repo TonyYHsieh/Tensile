@@ -837,15 +837,17 @@ class KernelWriterSource(KernelWriter):
       restrictStr = "__restrict__"
     ptrStr = kernel["ProblemType"]["DestDataType"].toDevice(self.language) \
         if not kernel["_GlobalAccumulation"] else "float"
-    ptrStr  += ("" if kernel["ProblemType"]["StridedBatched"] else "*")
-    batchStr = ("" if kernel["ProblemType"]["StridedBatched"] else "Batch")
+    isStridedBuffer = kernel["ProblemType"]["StridedBatched"] or kernel["_GlobalAccumulation"]
+    ptrStr  += ("" if isStridedBuffer else "*")
+    batchStr = ("" if isStridedBuffer else "Batch")
     s += "  " + globalStr + ptrStr + " *"+ batchStr + "D,"
     s += self.endLine
     s += "  " + globalStr + ptrStr + " const * " + restrictStr + " " + batchStr + "C,"
     s += self.endLine
 
-    ptrStr  = kernel["ProblemType"]["DataType"].toDevice(self.language)
-    ptrStr += ("" if kernel["ProblemType"]["StridedBatched"] else "*")
+    ptrStr   = kernel["ProblemType"]["DataType"].toDevice(self.language)
+    ptrStr  += ("" if kernel["ProblemType"]["StridedBatched"] else "*")
+    batchStr = ("" if kernel["ProblemType"]["StridedBatched"] else "Batch")
     s += "  " + globalStr + ptrStr + " const * " + restrictStr + " " + batchStr + "A,"
     s += self.endLine
     s += "  " + globalStr + ptrStr + " const * " + restrictStr + " " + batchStr + "B"
@@ -937,6 +939,7 @@ class KernelWriterSource(KernelWriter):
     s = ""
     s += " {" + self.endLine
     return s
+
 
   ##############################################################################
   # Allocate Resources
@@ -1039,6 +1042,17 @@ class KernelWriterSource(KernelWriter):
     kStr += "  %sDATA_TYPE localMemory[LDS_NUM_ELEMENTS];%s" \
         % (self.sharedDeclStr, self.endLine )
 
+
+    ####################################
+    # apply general batch
+    if not kernel["ProblemType"]["StridedBatched"]:
+      kStr += self.endLine
+      kStr += "  unsigned int wg = " + self.getGroupIdStr + "(2);" + self.endLine
+      if not kernel["_GlobalAccumulation"]:
+        kStr += "  DEST_DATA_TYPE      * D = BatchD[wg];" + self.endLine
+        kStr += "  DEST_DATA_TYPE const* C = BatchC[wg];" + self.endLine
+      kStr += "  DATA_TYPE      const* A = BatchA[wg];" + self.endLine
+      kStr += "  DATA_TYPE      const* B = BatchB[wg];" + self.endLine
 
     ####################################
     # apply offset
@@ -1295,14 +1309,6 @@ class KernelWriterSource(KernelWriter):
           kStr += " / size" + self.indexChars[index2]
         kStr += " ) % size" + self.indexChars[index] + ";" + self.endLine
 
-      if not kernel["ProblemType"]["StridedBatched"]:
-        batchStride = "1"
-        kStr += "  unsigned int wg = 0"
-        for index in nonTileFreeIndices:
-          kStr += " + wg%s * %s" % (self.indexChars[index], batchStride)
-          batchStride = "size%s" % self.indexChars[index]
-        kStr += ";%s" % self.endLine
-
     return kStr
 
   ##############################################################################
@@ -1544,10 +1550,6 @@ class KernelWriterSource(KernelWriter):
   ##############################################################################
   def graAddresses(self, kernel, tP):
     kStr = ""
-
-    if not kernel["ProblemType"]["StridedBatched"]:
-      kStr += "  DATA_TYPE const* %s = Batch%s[wg];" % (tP["tensorChar"], tP["tensorChar"])
-      kStr += self.endLine
 
     for perp in range(0, tP["nrp"]):
       for sPerp in range(0, tP["nrpv"]):
@@ -2930,7 +2932,7 @@ class KernelWriterSource(KernelWriter):
         kStr += "flattenedGlobalC1;"
       elif isPackedIndex(kernel,i):
         kStr += "0; // will be set below"
-      elif kernel["ProblemType"]["StridedBatched"]:
+      elif kernel["ProblemType"]["StridedBatched"] or kernel["_GlobalAccumulation"]:
         kStr += "(wg%s);" % (self.indexChars[i])
       else:
         kStr += "0;"
@@ -2946,14 +2948,6 @@ class KernelWriterSource(KernelWriter):
         indexChar = self.indexChars[i]
         kStr += " + (size%s - 1) * %s" % (indexChar, strideStr)
       kStr += ";" + self.endLine
-
-    if not kernel["ProblemType"]["StridedBatched"]:
-      ptrStr = kernel["ProblemType"]["DestDataType"].toDevice(self.language) \
-          if not kernel["_GlobalAccumulation"] else "float"
-      kStr += "  " + ptrStr + " *D = BatchD[wg];"
-      kStr += self.endLine
-      kStr += "  " + ptrStr + " const* C = BatchC[wg];"
-      kStr += self.endLine
 
     return kStr
 
