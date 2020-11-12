@@ -690,17 +690,17 @@ namespace Tensile
         using BetaType  = Beta;
 
         TypedContractionInputs();
-        TypedContractionInputs(A const*  _a,
-                               B const*  _b,
-                               C const*  _c,
-                               D*        _d,
-                               A* const* _batchA,
-                               B* const* _batchB,
-                               C* const* _batchC,
-                               D**       _batchD,
-                               Alpha     _alpha,
-                               Beta      _beta,
-                               void*     _ws = nullptr);
+        TypedContractionInputs(A const*        _a,
+                               B const*        _b,
+                               C const*        _c,
+                               D*              _d,
+                               A const* const* _batchA,
+                               B const* const* _batchB,
+                               C const* const* _batchC,
+                               D* const*       _batchD,
+                               Alpha           _alpha,
+                               Beta            _beta,
+                               void*           _ws = nullptr);
         ~TypedContractionInputs();
 
         A const* a = nullptr;
@@ -711,7 +711,7 @@ namespace Tensile
         A const* const* batchA = nullptr;
         B const* const* batchB = nullptr;
         C const* const* batchC = nullptr;
-        D**             batchD = nullptr;
+        D* const*       batchD = nullptr;
 
         void* ws = nullptr;
 
