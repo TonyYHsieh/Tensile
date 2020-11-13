@@ -2498,9 +2498,11 @@ class Solution:
 
     # avoid bug somehow related to GlobalSplitU + Persistent
     # avoid bug related to WGM<0
+    # General Batch doesn't support PersistentKernel
     if state["PersistentKernel"] and (\
             (state["KernelLanguage"] == "Assembly" and state["GlobalSplitU"] != 1) or \
-            (state["KernelLanguage"] == "Assembly" and state["WorkGroupMapping"] < 0) ):
+            (state["KernelLanguage"] == "Assembly" and state["WorkGroupMapping"] < 0) or \
+            (not state["ProblemType"]["StridedBatched"])):
       state["PersistentKernel"] = 0
 
     if state["PersistentKernelAlongBatch"] and (\
