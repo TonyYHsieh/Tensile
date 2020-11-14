@@ -1860,6 +1860,9 @@ class Solution:
     if "Valid" not in state:
       state["Valid"] = True
 
+    if (not state["ProblemType"]["StridedBatched"]) and (not state["ProblemType"]['Batched']):
+      reject(state, "General Batched GEMM only support Batched Problem")
+
     EnableMatrixInstruction = state["EnableMatrixInstruction"] if "EnableMatrixInstruction" in state else None
     if EnableMatrixInstruction == None:
       if  ("MIBlock" in state and len(state["MIBlock"]) == 6) \

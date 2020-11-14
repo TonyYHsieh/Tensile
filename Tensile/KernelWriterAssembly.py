@@ -3102,15 +3102,17 @@ class KernelWriterAssembly(KernelWriter):
       kStr += inst("s_waitcnt", "lgkmcnt(0)", "wait for %u bytes of kern args" % self.kernArgOffset )
 
       if not kernel["ProblemType"]["StridedBatched"]:
-        tmpSgpr = self.getTmpSgpr(1).idx()
-        kStr += self.endLine
-        kStr += inst("s_mul_i32", sgpr(tmpSgpr), sgpr("WorkGroup2"), 0x8, "offset of global buffer address")
-        if not kernel["_GlobalAccumulation"]:
-          kStr += inst("s_load_dwordx2", sgpr("AddressD", 2), sgpr("AddressD",2), sgpr(tmpSgpr), "load global buffer D address")
-          kStr += inst("s_load_dwordx2", sgpr("AddressC", 2), sgpr("AddressC",2), sgpr(tmpSgpr), "load global buffer C address")
-        kStr += inst("s_load_dwordx2", sgpr("AddressA", 2), sgpr("AddressA",2), sgpr(tmpSgpr), "load global buffer A address")
-        kStr += inst("s_load_dwordx2", sgpr("AddressB", 2), sgpr("AddressB",2), sgpr(tmpSgpr), "load global buffer B address")
-        kStr += inst("s_waitcnt", "lgkmcnt(0)", "wait global buffer adress ready")
+        for idx in kernel["ProblemType"]["IndicesBatch"]:
+          if not isPackedIndex(kernel,idx):
+            tmpSgpr = self.getTmpSgpr(1).idx()
+            kStr += self.endLine
+            kStr += inst("s_mul_i32", sgpr(tmpSgpr), sgpr("WorkGroup2"), 0x8, "offset of global buffer address")
+            if not kernel["_GlobalAccumulation"]:
+              kStr += inst("s_load_dwordx2", sgpr("AddressD", 2), sgpr("AddressD",2), sgpr(tmpSgpr), "load global buffer D address")
+              kStr += inst("s_load_dwordx2", sgpr("AddressC", 2), sgpr("AddressC",2), sgpr(tmpSgpr), "load global buffer C address")
+            kStr += inst("s_load_dwordx2", sgpr("AddressA", 2), sgpr("AddressA",2), sgpr(tmpSgpr), "load global buffer A address")
+            kStr += inst("s_load_dwordx2", sgpr("AddressB", 2), sgpr("AddressB",2), sgpr(tmpSgpr), "load global buffer B address")
+            kStr += inst("s_waitcnt", "lgkmcnt(0)", "wait global buffer adress ready")
     else:
       kStr += ".if 0\n"
 
