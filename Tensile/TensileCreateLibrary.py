@@ -77,7 +77,7 @@ def getAssemblyCodeObjectFiles(kernels, kernelWriterAssembly, outputPath):
     coFiles = []
     for arch, archKernels in archs.items():
       archName = 'gfx'+''.join(map(str,arch))
-      objectFiles = list([kernelWriterAssembly.getKernelFileBase(k) + '.o' \
+      objectFiles = list([os.path.join(asmDir, kernelWriterAssembly.getKernelFileBase(k) + '.o') \
                           for k in archKernels \
                           if k['KernelLanguage'] == 'Assembly'])
       if len(objectFiles) == 0:
@@ -88,7 +88,9 @@ def getAssemblyCodeObjectFiles(kernels, kernelWriterAssembly, outputPath):
           destArchDir = ensurePath(os.path.join(destDir, archName))
           coFile = os.path.join(destArchDir, 'TensileLibrary_{}.co'.format(archName))
         args = kernelWriterAssembly.getLinkCodeObjectArgs(objectFiles, coFile)
-        subprocess.check_call(args, cwd=asmDir)
+        if globalParameters["PrintCodeCommands"]:
+          print(' '.join(args))
+        subprocess.check_call(args)
         coFiles.append(coFile)
       else:
         assemblyKernelNames = [kernelWriterAssembly.getKernelFileBase(k) for k in archKernels]
@@ -187,7 +189,7 @@ def buildSourceCodeObjectFile(CxxCompiler, outputPath, kernelFile):
       compileArgs = [which('hipcc')] + hipFlags + archFlags + [kernelFile, '-c', '-o', os.path.join(buildPath, objectFilename)]
 
       if globalParameters["PrintCodeCommands"]:
-        print('hipcc:', ' '.join(compileArgs))
+        print(' '.join(compileArgs))
       subprocess.check_call(compileArgs)
 
       for i in range(len(archs)):
@@ -220,6 +222,7 @@ def buildSourceCodeObjectFile(CxxCompiler, outputPath, kernelFile):
       extractedCOs = [os.path.join(buildPath, name) for name in coFilenames]
       destCOs = [os.path.join(destDir, name) for name in coFilenames]
       destCosList += destCOs
+      print('cp ' + buildPath + '/* ' + destDir)
       for (src, dst) in zip(extractedCOs, destCOs):
         shutil.copyfile(src, dst)
 

@@ -7805,10 +7805,12 @@ class KernelWriterAssembly(KernelWriter):
   #      when DepthULdsDivisor > 1
   ##############################################################################
   def localWriteDo(self, kernel, tP, uDu=0):
-    if not self.do["LocalWrite"]: return ""
     tc = tP["tensorChar"]
     self.localWriteDoCnt += 1
     imod = Code.Module()
+
+    if not self.do["LocalWrite"]: return imod
+
     if not kernel["DirectToLds%s"%tc]:
       instruction = tP["localWriteInstruction"]
       numBlocks = instruction.numBlocks
@@ -8751,6 +8753,9 @@ class KernelWriterAssembly(KernelWriter):
   # Shift Vector Components d0,1
   ##############################################################################
   def shiftVectorComponents(self, kernel, tP):
+    if not self.do["PostLoop"]:
+      return ""
+
     if kernel["EnableMatrixInstruction"]:
       return self.shiftVectorComponentsMFMA(kernel, tP)
     else:
