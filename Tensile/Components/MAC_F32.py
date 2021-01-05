@@ -61,33 +61,47 @@ class MAC_F32_Plain(MAC):
 
         vars["instruction"] = instruction
 
-        priority = Component.Priority.find(writer)
-        macIdx = 0
+        useClause = writer.asmCaps["HasClause"] and (kernel["PerformanceWaitLocation"] == -1) and (kernel["PerformanceSyncLocation"] == -1)
+#        useClause = False
 
+        priority = Component.Priority.find(writer)
+
+        total_instruction = kernel["ThreadTile1"] * kernel["ThreadTile0"] * innerUnroll
+        clause_start = 0
+        clause_size = 32
+        macIdx = 0
         for b in range(0, kernel["ThreadTile1"]):
             for a in range(0, kernel["ThreadTile0"]):
                 for iui in range(0, innerUnroll):
                     vars["a"] = a
                     vars["b"] = b
                     vars["iui"] = iui
+                    vars["clause"] = clause_size
 
                     vars["cStr"] = "v[vgprValuC + {a} + {b}*{ThreadTile0}]".format_map(vars)
                     vars["aStr"] = "v[vgprValuA_X{m}_I{iui} + {a}]".format_map(vars)
                     vars["bStr"] = "v[vgprValuB_X{m}_I{iui} + {b}]".format_map(vars)
+
+                    if useClause and (macIdx >= clause_start):
+                      vars["clause"] = (total_instruction - clause_start - 1) if ((total_instruction - clause_start) < clause_size) else (clause_size - 1)
+                      kStr += "s_clause {clause}{endLine}".format_map(vars)
+                      clause_start += (vars["clause"]+1)
 
                     if instruction == "v_fma_f32":
                         kStr += "v_fma_f32 {cStr}, {aStr}, {bStr}, {cStr}{endLine}".format_map(vars)
                     else:
                         kStr += "{instruction} {cStr}, {aStr}, {bStr}{endLine}".format_map(vars)
 
-                    kStr += priority(writer, 1, "Raise priority while processing macs")
+                    if not useClause:
+                      kStr += priority(writer, 1, "Raise priority while processing macs")
+                      if macIdx == kernel["PerformanceWaitLocation"]:
+                          kStr += "s_waitcnt lgkmcnt({PerformanceWaitCount}) // extra wait for performance{endLine}".format_map(vars)
+                      if macIdx == kernel["PerformanceSyncLocation"]:
+                          kStr += "s_barrier // extra barrier for performance{endLine}".format_map(vars)
 
-                    if macIdx == kernel["PerformanceWaitLocation"]:
-                        kStr += "s_waitcnt lgkmcnt({PerformanceWaitCount}) // extra wait for performance{endLine}".format_map(vars)
-                    if macIdx == kernel["PerformanceSyncLocation"]:
-                        kStr += "s_barrier // extra barrier for performance{endLine}".format_map(vars)
                     macIdx += 1
 
-        kStr += priority(writer, 0, "Reset priority after macs")
+        if not useClause:
+          kStr += priority(writer, 0, "Reset priority after macs")
 
         return kStr

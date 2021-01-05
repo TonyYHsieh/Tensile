@@ -1440,7 +1440,7 @@ def GetAsmCaps(isaVersion):
   rv["v_fmac_f32"]      = tryAssembler(isaVersion, "v_fmac_f32 v20, v21, v22")
 
   rv["HasAtomicAdd"]    = tryAssembler(isaVersion, "buffer_atomic_add_f32 v0, v1, s[0:3], 0 offen offset:0")
-
+  rv["HasClause"]       = tryAssembler(isaVersion, "s_clause 0")
 
   if tryAssembler(isaVersion, "s_waitcnt vmcnt(63)"):
     rv["MaxVmcnt"] = 63
