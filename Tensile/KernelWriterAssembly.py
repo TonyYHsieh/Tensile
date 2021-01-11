@@ -1535,6 +1535,7 @@ class KernelWriterAssembly(KernelWriter):
     PLR = kernel["PrefetchLocalRead"] if kernel["PrefetchLocalRead"] < kernel["LoopIters"] else kernel["LoopIters"] - 1
     valuBlocks = (1+PLR) * kernel["InnerUnroll"]
 
+    vgprIdx += 1
     self.startVgprValuA = vgprIdx; vgprIdx += numVgprValuA
     self.startVgprG2LA = None
     if not kernel["DirectToLdsA"] or self.do["KeepDirectToLdsAlloc"]:
@@ -1542,9 +1543,9 @@ class KernelWriterAssembly(KernelWriter):
       # otherwise, put G2L here since it can overlap valu
       if not kernel["PrefetchGlobalRead"] and kernel["DepthULdsDivisor"] == 1: # g2l can overlap valu
         self.startVgprG2LA = self.startVgprValuA
-        vgprIdx = self.startVgprValuA \
-            + max(self.numVgprValuAPerBlock*valuBlocks, self.numVgprG2LA)
+        vgprIdx = self.startVgprValuA + max(self.numVgprValuAPerBlock*valuBlocks, self.numVgprG2LA)
 
+    vgprIdx += 1
     self.startVgprValuB = vgprIdx; vgprIdx += numVgprValuB
     self.startVgprG2LB = None
     if not kernel["DirectToLdsB"] or self.do["KeepDirectToLdsAlloc"]:
@@ -9452,6 +9453,9 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   # Release any resources used by the global write
   def cleanupGlobalWrite(self, kernel):
+    if not self.do["PostLoop"]:
+      return
+
     self.vgprPool.checkIn(self.coord0)
     self.vgprPool.checkIn(self.coord1)
 
@@ -11190,8 +11194,8 @@ class KernelWriterAssembly(KernelWriter):
 
   # rpv = regs per vector
     rpv = bpl/4.0
-    if self.version[0] == 10:
-      extraFields += " glc, slc, dlc"
+#     if self.version[0] == 10:
+#      extraFields += " glc, slc, dlc"
 
     if useBuffer:
       tailFields = "offen offset:%u"%offset

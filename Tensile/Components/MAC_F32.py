@@ -92,16 +92,14 @@ class MAC_F32_Plain(MAC):
                     else:
                         kStr += "{instruction} {cStr}, {aStr}, {bStr}{endLine}".format_map(vars)
 
-                    if not useClause:
-                      kStr += priority(writer, 1, "Raise priority while processing macs")
-                      if macIdx == kernel["PerformanceWaitLocation"]:
-                          kStr += "s_waitcnt lgkmcnt({PerformanceWaitCount}) // extra wait for performance{endLine}".format_map(vars)
-                      if macIdx == kernel["PerformanceSyncLocation"]:
-                          kStr += "s_barrier // extra barrier for performance{endLine}".format_map(vars)
+                    kStr += priority(writer, 3, "Raise priority while processing macs")
+                    if macIdx == kernel["PerformanceWaitLocation"]:
+                        kStr += "s_waitcnt lgkmcnt({PerformanceWaitCount}) // extra wait for performance{endLine}".format_map(vars)
+                    if macIdx == kernel["PerformanceSyncLocation"]:
+                        kStr += "s_barrier // extra barrier for performance{endLine}".format_map(vars)
 
                     macIdx += 1
 
-        if not useClause:
-          kStr += priority(writer, 0, "Reset priority after macs")
+        kStr += priority(writer, 0, "Reset priority after macs")
 
         return kStr

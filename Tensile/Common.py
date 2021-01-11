@@ -248,7 +248,7 @@ defaultGlobalParameters = deepcopy(globalParameters)
 # Enumerate Valid Solution Parameters
 ################################################################################
 validWorkGroups = []
-for numThreads in range(64, 1025, 64):
+for numThreads in range(32, 1025, 32):
   for nsg in [ 1, 2, 4, 8, 16, 32, 64, 96, 128, 256 ]:
     for sg0 in range(1, numThreads//nsg+1):
       sg1 = numThreads//nsg//sg0
