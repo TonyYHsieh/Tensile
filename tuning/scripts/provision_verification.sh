@@ -73,7 +73,7 @@ if [ -z ${WORKING_PATH+foo} ]; then
 fi
 
 if [ -z ${LOGS+foo} ]; then
-  LOGS=${WORKING_PATH}/logs 
+  LOGS=${WORKING_PATH}/logs
 fi
 
 if [ -z ${TENSILE_PATH+foo} ]; then
@@ -164,7 +164,7 @@ if [[ ${MERGE} == true ]]; then
     EXE_MERGE="python3 ${MERGE_SCRIPT} ${ASM_PATH} ${EXACT_PATH} ${MERGE_PATH}"
     ${EXE_MERGE} 2>&1 | tee ${LOGS}/log-merge-script
   fi
-  
+
 else
   MERGE_PATH=${EXACT_PATH}
 fi
